@@ -27,3 +27,8 @@ go.work.sum
 \.lh
 \.vscode
 \.idea
+
+output/
+temp/
+models/*.bin
+models/*.ggml
