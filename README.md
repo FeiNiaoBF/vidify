@@ -20,9 +20,9 @@
 ## 系统要求
 
 - Go 1.23 或更高版本
-- FFmpeg 4.0+ (需安装到系统 PATH)
-- Whisper.cpp (自动集成或手动配置)
-- 操作系统：Linux / macOS / Windows
+- FFmpeg 8.0+ (需安装到系统 PATH)
+- Whisper.cpp (自动下载模型或手动配置)
+- 操作系统：Windows (Linux / macOS)
 
 ## 快速开始
 
@@ -34,7 +34,7 @@ git clone https://github.com/FeiNiaoBF/vidify.git
 cd vidify
 
 # 安装依赖
-go mod download
+go mod tidy
 
 # 编译项目
 make build
@@ -53,14 +53,14 @@ go run main.go
 ./vidify convert -i input.mp3 -o output.mp4 \
   --subtitle-style "FontSize=24,PrimaryColour=&HFFFFFF"
 
-# 批量处理
+# 批量处理(未设计)
 ./vidify batch -d ./audio_files -o ./output_videos
 
 # 查看帮助
 ./vidify --help
 ```
 
-### Web API 模式
+<!-- ### Web API 模式
 
 ```bash
 # 启动 API 服务
@@ -70,47 +70,45 @@ go run main.go
 curl -X POST http://localhost:8080/api/v1/convert \
   -F "file=@input.mp3" \
   -F "config={\"subtitle_style\":\"FontSize=24\"}"
-```
+``` -->
 
-## 项目结构
+## 项目结构(初步设计)
 
 ```
 vidify/
 ├── cmd/                    # 命令行入口
-│   ├── cli/               # CLI 命令实现
-│   └── server/            # Web 服务器
-├── internal/              # 私有应用代码
-│   ├── audio/            # 音频处理模块
-│   ├── video/            # 视频生成模块
-│   ├── subtitle/         # 字幕处理模块
-│   ├── whisper/          # Whisper 集成
-│   ├── ffmpeg/           # FFmpeg 封装
-│   ├── processor/        # 任务处理器
-│   └── config/           # 配置管理
-├── pkg/                   # 可复用的公共库
-│   ├── logger/           # 日志工具
-│   ├── validator/        # 参数验证
-│   └── utils/            # 通用工具
-├── api/                   # API 定义
-│   ├── v1/               # API v1 版本
-│   └── middleware/       # 中间件
-├── configs/               # 配置文件
-│   ├── config.yaml       # 默认配置
+│   ├── cli/                # CLI 命令实现
+│   └── server/             # Web 服务器
+│   └── vidify/main.go      # 主程序入口
+├── internal/               # 私有应用代码
+│   ├── buildinfo/          # 构建信息
+│   ├── audio/              # 音频处理模块
+│   ├── video/              # 视频生成模块
+│   ├── subtitle/           # 字幕处理模块
+│   ├── whisper/            # Whisper 集成
+│   ├── ffmpeg/             # FFmpeg 封装
+│   ├── pipeline/           # 处理流水线
+│   ├── logging/             # 日志工具
+│   └── config/             # 配置管理
+├── pkg/                    # 可复用的公共库
+│   ├── errors/             # 错误处理
+│   └── utils/              # 通用工具
+├── api/                    # API 定义
+│   └── v1/                 # API v1 版本
+├── configs/                # 配置文件
+│   ├── config.yaml         # 默认配置
 │   └── config.example.yaml
-├── test/                  # 测试文件
-│   ├── integration/      # 集成测试
-│   └── testdata/         # 测试数据
-├── scripts/               # 构建和部署脚本
-├── docs/                  # 文档
-│   ├── architecture.md   # 架构设计
-│   └── api.md            # API 文档
-├── deployments/           # 部署配置
-│   ├── docker/           # Docker 配置
-│   └── k8s/              # Kubernetes 配置
-├── main.go               # 程序入口
-├── Makefile              # 构建脚本
-├── go.mod                # Go 模块文件
-└── README.md             # 项目说明
+├── test/                   # 测试文件
+├── scripts/                # 构建和部署脚本
+├── docs/                   # 文档
+│   ├── architecture.md     # 架构设计
+│   ├── process.md          # 处理流程
+│   └── api.md              # API 文档
+├── deployments/            # 部署配置
+│   └── docker/             # Docker 配置
+├── Makefile                # 构建脚本
+├── go.mod                  # Go 模块文件
+└── README.md               # 项目说明
 ```
 
 ## 配置说明
@@ -118,39 +116,22 @@ vidify/
 在 `configs/config.yaml` 中配置：
 
 ```yaml
-app:
-  name: "Vidify"
-  version: "1.0.0"
-  env: "production"
-
-server:
-  host: "0.0.0.0"
-  port: 8080
-  read_timeout: 60
-  write_timeout: 60
-
-whisper:
-  model_path: "./models/ggml-base.bin"
-  language: "auto"
-  threads: 4
-
-ffmpeg:
-  binary_path: "ffmpeg"
-  default_format: "mp4"
-  video_codec: "libx264"
-  audio_codec: "aac"
-
-subtitle:
-  font_name: "Arial"
-  font_size: 24
-  primary_colour: "&HFFFFFF"
-  outline_colour: "&H000000"
-
-processor:
-  max_workers: 4
-  queue_size: 100
-  temp_dir: "./temp"
-  output_dir: "./output"
+# flag > env > 配置文件 > 默认值
+Paths:
+  OutputDir: "./output"      # 输出视频文件目录
+  TempDir: "./temp"          # 临时文件目录
+  ModelsDir: "./models"      # Whisper 模型目录
+Tools:
+  FFmpegPath: "./bin/ffmpeg"          # FFmpeg 可执行文件路径
+  WhisperPath: "./bin/whisper-cli.exe"  # Whisper.cpp 可执行文件路  径
+Runtime:
+  Language: "auto"               # 识别语言
+  Model:
+  "ggml-base.en.bin"       # Whisper 模型文件名
+  DryRun: false                  # 是否仅模拟运行
+Logging:
+  Level: "info"                  # 日志级别 (debug, info, warn, error)
+  Mode: "development"                 # 日志输出模式 (development, production)
 ```
 
 ## 运行测试
@@ -173,12 +154,12 @@ make coverage
 
 详细的 API 文档请参考 [API Documentation](docs/api.md) -->
 
-### 主要端点
+<!-- ### 主要端点
 
 - `POST /api/v1/convert` - 音频转视频
 - `GET /api/v1/status/:task_id` - 查询任务状态
 - `GET /api/v1/download/:task_id` - 下载生成的视频
-- `DELETE /api/v1/task/:task_id` - 取消任务
+- `DELETE /api/v1/task/:task_id` - 取消任务 -->
 
 <!-- ## Docker 部署
 
@@ -242,4 +223,3 @@ docker run -d \
 ---
 
 ⭐ 如果这个项目对您有帮助，请给一个 Star 支持！
-```

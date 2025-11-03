@@ -20,7 +20,7 @@ type AppConfig struct {
 type PathsConfig struct {
 	Temp   string `mapstructure:"temp"`
 	Output string `mapstructure:"output"`
-	Models string `mapstructure:"models"`
+	Models string `mapstructure:"models"` // for whisper models
 }
 
 // ToolsConfig stores external binary locations.

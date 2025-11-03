@@ -24,3 +24,13 @@ Ensure FFmpeg is reachable on `PATH` and Whisper models reside under `models/`. 
 - Group commits by concern (e.g., scaffolding, docs, tooling) and follow the `<type>: <imperative>` convention already documented.
 - Avoid committing large artefacts; prefer storing Whisper models under `models/` and referencing them via release assets or external storage.
 - Tag releases from `main` (`git tag vX.Y.Z`) after validating binaries, and document deployment steps in PR descriptions.
+
+## Whisper Integration (Windows CLI)
+- Prefer using the official whisper.cpp Windows release zip. Keep the unpacked `whisper-cli.exe` (and accompanying DLLs) under `third_party/whisper.cpp/bin/` so it can be invoked from Go via `exec.Command`.
+- Store Whisper models (e.g., `ggml-base.en.bin`) under `models/` and point configuration (`config.AppConfig.Tools.Whisper`) to that location for runtime discovery.
+- `internal/tools/transcriber` should wrap `whisper-cli.exe` by:
+  1. Converting source audio to 16 kHz mono WAV via FFmpeg if necessary.
+  2. Executing `whisper-cli.exe -m <model> -f <wav> -osrt -otxt -of <temp_prefix>` and returning the generated subtitle path.
+  3. Handling concurrency with a worker pool or mutex to avoid CLI saturation; surface useful stderr logs when the subprocess fails.
+- Ensure `PATH` (or `PATHEXT`) includes the CLI directory at runtime, or resolve the binary explicitly from configuration before spawning the process.
+- Document how to refresh the bundled CLI when upgrading whisper.cpp (download new release, replace binaries, validate with a sample transcription).
