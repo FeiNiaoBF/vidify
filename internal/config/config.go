@@ -31,9 +31,10 @@ type ToolsConfig struct {
 
 // RuntimeConfig defines operational defaults for CLI workflows.
 type RuntimeConfig struct {
-	Language string `mapstructure:"language"`
-	Model    string `mapstructure:"model"`
-	DryRun   bool   `mapstructure:"dry_run"`
+	Language string            `mapstructure:"language"`
+	Model    string            `mapstructure:"model"`
+	DryRun   bool              `mapstructure:"dry_run"`
+	Env      map[string]string `mapstructure:"env"`
 }
 
 // LoggingConfig governs logger initialisation.
@@ -65,10 +66,11 @@ func (l *Loader) setDefaults() {
 	l.v.SetDefault("paths.output", "output")
 	l.v.SetDefault("paths.models", "models")
 	l.v.SetDefault("tools.ffmpeg", "ffmpeg")
-	l.v.SetDefault("tools.whisper", "whisper")
+	l.v.SetDefault("tools.whisper", "whisper-cli")
 	l.v.SetDefault("runtime.language", "auto")
 	l.v.SetDefault("runtime.model", "ggml-base.en.bin")
 	l.v.SetDefault("runtime.dry_run", true)
+	l.v.SetDefault("runtime.env", map[string]string{})
 	l.v.SetDefault("logging.level", "info")
 	l.v.SetDefault("logging.mode", "development")
 }

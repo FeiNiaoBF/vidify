@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -79,9 +80,10 @@ type ConvertOptions struct {
 
 // ConvertResult reports the planned or completed conversion artefacts.
 type ConvertResult struct {
-	OutputPath string
-	Steps      []string
-	DryRun     bool
+	OutputPath   string
+	SubtitlePath string
+	Steps        []string
+	DryRun       bool
 }
 
 // Convert validates the input and returns a plan for the conversion. When DryRun is false,
@@ -91,6 +93,7 @@ func (p *Pipeline) Convert(ctx context.Context, opts ConvertOptions) (ConvertRes
 		return ConvertResult{}, ErrInputRequired
 	}
 
+	// Use input filename to derive output if not provided
 	output := strings.TrimSpace(opts.Output)
 	if output == "" {
 		base := strings.TrimSuffix(filepath.Base(opts.Input), filepath.Ext(opts.Input))
@@ -101,15 +104,29 @@ func (p *Pipeline) Convert(ctx context.Context, opts ConvertOptions) (ConvertRes
 	}
 
 	steps := p.planSteps(opts)
-	result := ConvertResult{OutputPath: output, Steps: steps, DryRun: opts.DryRun}
+	baseName := strings.TrimSuffix(filepath.Base(output), filepath.Ext(output))
+	if baseName == "" {
+		baseName = "output"
+	}
+
+	subtitlePath := strings.TrimSpace(opts.Subtitle)
+	subtitleProvided := subtitlePath != ""
+	if !subtitleProvided {
+		subtitlePath = filepath.Join(filepath.Dir(output), baseName+".srt")
+	}
+	result := ConvertResult{OutputPath: output, SubtitlePath: subtitlePath, Steps: steps, DryRun: opts.DryRun}
 
 	if opts.DryRun {
 		p.debug("convert dry-run", logging.Field{Key: "input", Value: opts.Input}, logging.Field{Key: "output", Value: output})
 		return result, nil
 	}
 
-	subtitlePath := strings.TrimSpace(opts.Subtitle)
-	if subtitlePath == "" {
+	if subtitleProvided {
+		if err := p.ensureSubtitleProvided(subtitlePath); err != nil {
+			return result, err
+		}
+		p.info("using provided subtitle", logging.Field{Key: "subtitle", Value: subtitlePath})
+	} else {
 		if p.transcriber == nil {
 			return result, ErrNotImplemented
 		}
@@ -117,15 +134,18 @@ func (p *Pipeline) Convert(ctx context.Context, opts ConvertOptions) (ConvertRes
 			InputPath:  opts.Input,
 			ModelPath:  filepath.Join(p.cfg.ModelsDir, opts.Model),
 			Language:   opts.Language,
-			OutputPath: filepath.Join(p.cfg.TempDir, filepath.Base(opts.Input)+".srt"),
+			OutputPath: subtitlePath,
 			TempDir:    p.cfg.TempDir,
 		}
 
+		p.info("transcribing audio", logging.Field{Key: "input", Value: transReq.InputPath}, logging.Field{Key: "subtitle", Value: subtitlePath})
 		transRes, err := p.transcriber.Transcribe(ctx, transReq)
 		if err != nil {
 			return result, wrapToolErr("transcribe", err)
 		}
 		subtitlePath = transRes.SubtitlePath
+		result.SubtitlePath = subtitlePath
+		p.info("transcription complete", logging.Field{Key: "subtitle", Value: subtitlePath})
 	}
 
 	if p.renderer == nil {
@@ -139,14 +159,17 @@ func (p *Pipeline) Convert(ctx context.Context, opts ConvertOptions) (ConvertRes
 		TempDir:      p.cfg.TempDir,
 	}
 
+	p.info("rendering video", logging.Field{Key: "input", Value: renderReq.AudioPath}, logging.Field{Key: "subtitle", Value: renderReq.SubtitlePath}, logging.Field{Key: "output", Value: renderReq.OutputPath})
 	renderRes, err := p.renderer.Render(ctx, renderReq)
 	if err != nil {
 		return result, wrapToolErr("render", err)
 	}
 
-	return ConvertResult{OutputPath: renderRes.OutputPath, Steps: steps, DryRun: false}, nil
+	p.info("render complete", logging.Field{Key: "output", Value: renderRes.OutputPath})
+	return ConvertResult{OutputPath: renderRes.OutputPath, SubtitlePath: subtitlePath, Steps: steps, DryRun: false}, nil
 }
 
+// planSteps determines the sequence of operations based on provided options.
 func (p *Pipeline) planSteps(opts ConvertOptions) []string {
 	steps := []string{}
 	if strings.TrimSpace(opts.Subtitle) == "" {
@@ -261,6 +284,29 @@ func (p *Pipeline) debug(msg string, fields ...logging.Field) {
 	if p.logger != nil {
 		p.logger.Debug(msg, fields...)
 	}
+}
+
+func (p *Pipeline) info(msg string, fields ...logging.Field) {
+	if p.logger != nil {
+		p.logger.Info(msg, fields...)
+	}
+}
+
+func (p *Pipeline) warn(msg string, fields ...logging.Field) {
+	if p.logger != nil {
+		p.logger.Warn(msg, fields...)
+	}
+}
+
+func (p *Pipeline) ensureSubtitleProvided(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			p.warn("provided subtitle missing", logging.Field{Key: "subtitle", Value: path})
+			return fmt.Errorf("subtitle not found: %w", err)
+		}
+		return fmt.Errorf("subtitle unavailable: %w", err)
+	}
+	return nil
 }
 
 func defaultExtensions() []string {

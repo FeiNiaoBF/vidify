@@ -17,7 +17,7 @@ import (
 
 // Dependencies groups required collaborators to build the CLI application.
 type Dependencies struct {
-	Loader      *config.Loader //
+	Loader      *config.Loader
 	LogFactory  logging.Factory
 	Transcriber transcriber.Service
 	Renderer    renderer.Service
@@ -109,12 +109,25 @@ func (app *application) ensureRuntime(cmd *cobra.Command) error {
 		return fmt.Errorf("init logger: %w", err)
 	}
 
+	// initialize pipeline dependencies
+	transSvc := app.deps.Transcriber
+	if transSvc == nil {
+		transSvc, err = transcriber.NewCLI(transcriber.CLIOptions{
+			BinaryPath: cfg.Tools.Whisper,
+			FFmpegPath: cfg.Tools.FFmpeg,
+			Env:        cfg.Runtime.Env,
+		})
+		if err != nil {
+			return fmt.Errorf("init transcriber: %w", err)
+		}
+	}
+
 	pipe := pipeline.New(pipeline.Config{
 		OutputDir: cfg.Paths.Output,
 		TempDir:   cfg.Paths.Temp,
 		ModelsDir: cfg.Paths.Models,
 	}, pipeline.Dependencies{
-		Transcriber: app.deps.Transcriber,
+		Transcriber: transSvc,
 		Renderer:    app.deps.Renderer,
 		Logger:      logger,
 	})

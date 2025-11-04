@@ -83,7 +83,11 @@ func (app *application) runConvert(cmd *cobra.Command, flags *convertFlags) erro
 	printConvertResult(cmd, result)
 	if err != nil {
 		if errors.Is(err, pipeline.ErrNotImplemented) {
-			cmd.Println("Note: external tooling is not wired yet; conversion is planned only.")
+			if !result.DryRun && result.SubtitlePath != "" {
+				cmd.Println("Note: subtitles generated successfully, but video rendering is not wired yet.")
+			} else {
+				cmd.Println("Note: external tooling is not wired yet; conversion is planned only.")
+			}
 			return nil
 		}
 		return err
@@ -101,6 +105,9 @@ func (app *application) runConvert(cmd *cobra.Command, flags *convertFlags) erro
 func printConvertResult(cmd *cobra.Command, result pipeline.ConvertResult) {
 	if result.OutputPath != "" {
 		cmd.Printf("Output: %s\n", result.OutputPath)
+	}
+	if result.SubtitlePath != "" {
+		cmd.Printf("Subtitles: %s\n", result.SubtitlePath)
 	}
 	if len(result.Steps) == 0 {
 		return
