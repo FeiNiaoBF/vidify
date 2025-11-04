@@ -34,3 +34,10 @@ Ensure FFmpeg is reachable on `PATH` and Whisper models reside under `models/`. 
   3. Handling concurrency with a worker pool or mutex to avoid CLI saturation; surface useful stderr logs when the subprocess fails.
 - Ensure `PATH` (or `PATHEXT`) includes the CLI directory at runtime, or resolve the binary explicitly from configuration before spawning the process.
 - Document how to refresh the bundled CLI when upgrading whisper.cpp (download new release, replace binaries, validate with a sample transcription).
+
+## Renderer Implementation
+- The FFmpeg-backed renderer lives under `internal/tools/renderer` and must consume both the audio artifact and the `.srt` file produced by the transcriber.
+- Normalize inputs first: ensure the subtitle path exists, the output directory is created, and temporary scratch space is available for intermediate assets (e.g., waveform visuals).
+- Invoke FFmpeg via `exec.CommandContext`, passing `-i <audio>` and `-vf subtitles=<subtitle>` (or equivalent filter chain) alongside any user-specified `ExtraArgs`. Respect `ctx` for cancellation and limit stdout/stderr noise to what's helpful for troubleshooting.
+- Bubble structured errors with stderr excerpts so the pipeline can label failures (`render stage: ...`). Log start/finish markers through the logger injected into the pipeline.
+- Keep the renderer service configurable: allow overriding the FFmpeg binary path, subtitle styling options, and hardware acceleration flags via configuration so both CLI and future server modes reuse the same implementation.
