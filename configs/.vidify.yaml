@@ -1,0 +1,26 @@
+# Vidify default configuration
+# Place this file at ~/.vidify.yaml or in the project root.
+# All values can be overridden by CLI flags or VIDIFY_* environment variables.
+
+# Whisper model: tiny | base | small | medium | large
+model: medium
+
+# Language for transcription: "auto" for auto-detect, or BCP-47 code (en, zh, ja)
+language: auto
+
+# Enable translation mode (translate non-English to English)
+translate: false
+
+# Background image path (empty = built-in default)
+bg-image: ""
+
+# Output directory (empty = current directory)
+output: ""
+
+# Debug logging
+verbose: false
+
+# Advanced: override binary paths (leave empty to auto-detect)
+# whisper-bin: ""
+# whisper-model-dir: ""
+# ffmpeg-bin: ""
