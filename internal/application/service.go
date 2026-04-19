@@ -56,12 +56,14 @@ func (s *Service) ProcessFile(ctx context.Context, cfg domain.Config) port.Resul
 	// Validate the audio format before any I/O — cheap fail-fast.
 	audio, err := domain.NewAudio(cfg.InputPath)
 	if err != nil {
+		log.WithError(err).Warn("invalid input audio")
 		return port.Result{TaskID: taskID, InputPath: cfg.InputPath, Err: errors.Wrap(err, "invalid input audio")}
 	}
 
 	// Create the output directory early so both use cases can write there.
 	if cfg.OutputDir != "" {
 		if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
+			log.WithError(err).Error("cannot create output directory", "dir", cfg.OutputDir)
 			return port.Result{TaskID: taskID, InputPath: cfg.InputPath, Err: errors.Wrap(err, "cannot create output directory")}
 		}
 	}

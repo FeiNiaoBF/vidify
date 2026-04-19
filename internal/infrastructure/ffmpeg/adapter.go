@@ -97,9 +97,8 @@ func (a *Adapter) Merge(ctx context.Context, audio domain.Audio, subtitle domain
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		a.logger.Error("ffmpeg merge failed",
+		a.logger.WithError(err).Error("ffmpeg merge failed",
 			"output", string(output),
-			"error", err,
 		)
 		return domain.Video{}, errors.Wrapf(domain.ErrMergeFailed,
 			"ffmpeg exited with error: %v", err)

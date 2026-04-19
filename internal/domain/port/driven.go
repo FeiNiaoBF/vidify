@@ -53,4 +53,9 @@ type Logger interface {
 	// With returns a new Logger with the given key-value pairs prepended to
 	// every subsequent log entry. Keys must be strings; values can be any type.
 	With(args ...any) Logger
+
+	// WithError returns a new Logger with the error attached under the "error"
+	// key. It is sugar over With("error", err.Error()) for the common case of
+	// logging a non-nil error alongside a message.
+	WithError(err error) Logger
 }

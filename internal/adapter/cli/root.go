@@ -50,7 +50,17 @@ func init() {
 
 	// --- Persistent flags (available to all subcommands) ---
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: $HOME/.vidify.yaml)")
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "enable debug logging")
+	// --verbose/-v is kept as a convenience alias for --log-level debug.
+	// It overrides log.level in the Run handler so the flag priority is preserved.
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "shortcut for --log-level debug")
+
+	// --- Logging flags (persistent: apply to all subcommands) ---
+	rootCmd.PersistentFlags().String("log-dir", "", "directory for log files (default: ~/.vidify/logs)")
+	rootCmd.PersistentFlags().String("log-level", "info", "log level: debug|info|warn|error")
+	rootCmd.PersistentFlags().Bool("log-to-file", true, "write JSON log file in addition to console output")
+	rootCmd.PersistentFlags().Int("log-max-backups", 7, "number of old log files to keep")
+	rootCmd.PersistentFlags().Int("log-max-age", 30, "maximum age in days before a log file is deleted")
+	rootCmd.PersistentFlags().Int("log-max-size", 100, "maximum size in megabytes before a log file is rotated")
 
 	// --- Local flags (only for the root command) ---
 	rootCmd.Flags().StringP("input", "i", "", "input audio file or directory (required)")
@@ -64,8 +74,13 @@ func init() {
 	rootCmd.MarkFlagRequired("input")
 
 	// Bind all flags to viper so config file / env vars can override them.
-	// Viper key names match the flag names.
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+	viper.BindPFlag("log.dir", rootCmd.PersistentFlags().Lookup("log-dir"))
+	viper.BindPFlag("log.level", rootCmd.PersistentFlags().Lookup("log-level"))
+	viper.BindPFlag("log.to-file", rootCmd.PersistentFlags().Lookup("log-to-file"))
+	viper.BindPFlag("log.max-backups", rootCmd.PersistentFlags().Lookup("log-max-backups"))
+	viper.BindPFlag("log.max-age", rootCmd.PersistentFlags().Lookup("log-max-age"))
+	viper.BindPFlag("log.max-size", rootCmd.PersistentFlags().Lookup("log-max-size"))
 	viper.BindPFlag("input", rootCmd.Flags().Lookup("input"))
 	viper.BindPFlag("model", rootCmd.Flags().Lookup("model"))
 	viper.BindPFlag("language", rootCmd.Flags().Lookup("language"))

@@ -84,9 +84,8 @@ func (a *Adapter) Transcribe(ctx context.Context, audio domain.Audio, cfg domain
 	// stdout has the transcription result.
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		a.logger.Error("whisper transcription failed",
+		a.logger.WithError(err).Error("whisper transcription failed",
 			"output", string(output),
-			"error", err,
 		)
 		return domain.Subtitle{}, errors.Wrapf(domain.ErrTranscribeFailed,
 			"whisper-cli exited with error: %v", err)

@@ -1,6 +1,11 @@
 # Vidify default configuration
 # Place this file at ~/.vidify.yaml or in the project root.
 # All values can be overridden by CLI flags or VIDIFY_* environment variables.
+# Priority: CLI flags > environment variables > this file > built-in defaults.
+
+# ============================================================
+# Processing parameters
+# ============================================================
 
 # Whisper model: tiny | base | small | medium | large
 model: medium
@@ -17,10 +22,35 @@ bg-image: ""
 # Output directory (empty = current directory)
 output: ""
 
-# Debug logging
-verbose: false
+# ============================================================
+# Logging configuration
+# ============================================================
 
-# Advanced: override binary paths (leave empty to auto-detect)
+log:
+  # Directory for log files. Empty = ~/.vidify/logs (created automatically).
+  dir: " "
+
+  # Minimum log level written to both console and file.
+  # Accepted values: debug | info | warn | error
+  level: info
+
+  # Write a JSON-formatted log file in addition to console (Text) output.
+  # Set to false for pipe-friendly or CI environments.
+  to-file: true
+
+  # Number of old rotated log files to retain (oldest are deleted first).
+  max-backups: 7
+
+  # Maximum age in days before a log file is deleted.
+  max-age: 30
+
+  # Maximum size in megabytes before the active log file is rotated.
+  max-size: 100
+
+# ============================================================
+# Advanced: binary paths (leave empty to auto-detect)
+# ============================================================
+
 # whisper-bin: ""
 # whisper-model-dir: ""
 # ffmpeg-bin: ""

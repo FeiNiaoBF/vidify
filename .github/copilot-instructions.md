@@ -33,6 +33,7 @@ internal/common/           → Shared utilities (errors, helpers — no domain o
 | CLI framework   | `github.com/spf13/cobra`             |
 | Config          | `github.com/spf13/viper`             |
 | Logging         | `log/slog` (stdlib)                  |
+| Log rotation    | `gopkg.in/natefinch/lumberjack.v2`   |
 | Progress bar    | `github.com/vbauerster/mpb/v8`       |
 | Task ID         | `github.com/google/uuid`             |
 | Error wrapping  | `github.com/pkg/errors`              |
@@ -71,8 +72,10 @@ internal/common/           → Shared utilities (errors, helpers — no domain o
 
 - Entry point: `cmd/cli/main.go`
 - Root command: `vidify`
-- Flags: `-i/--input`, `-m/--model`, `-l/--language`, `--translate`, `--bg-image`, `-o/--output`
-- Viper binds to config file (`~/.vidify.yaml`) and environment variables (`VIDIFY_*`)
+- Processing flags: `-i/--input`, `-m/--model`, `-l/--language`, `--translate`, `--bg-image`, `-o/--output`
+- Logging flags: `--log-dir`, `--log-level`, `--log-to-file`, `--log-max-backups`, `--log-max-age`
+- Shortcut: `-v/--verbose` sets `--log-level debug`
+- Viper binds to config file (`~/.vidify.yaml`) under `log:` block and environment variables (`VIDIFY_*`)
 
 ## External Tool Calls
 
@@ -88,5 +91,4 @@ internal/common/           → Shared utilities (errors, helpers — no domain o
 - Do NOT import `internal/domain` from `internal/infrastructure` (infra implements domain interfaces, not the reverse)
 - Do NOT panic in library code; return errors
 - Do NOT use `log` package; use `log/slog`
-- Do NOT add features beyond what the PRD specifies
 - Do NOT add features beyond what the PRD specifies

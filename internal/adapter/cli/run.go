@@ -18,7 +18,7 @@ import (
 // that this file only contains presentation-layer concerns: flag resolution,
 // signal handling, and result formatting.
 func runRoot(cmd *cobra.Command, args []string) error {
-	c, err := di.Build(viper.GetViper(), os.Stderr, resolveWhisperBin())
+	c, err := di.Build(viper.GetViper(), resolveWhisperBin())
 	if err != nil {
 		return fmt.Errorf("initialization failed: %w", err)
 	}

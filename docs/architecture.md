@@ -91,8 +91,11 @@ internal/
 ├── infrastructure/
 │   ├── whisper/            # port.Transcriber implementation
 │   ├── ffmpeg/             # port.VideoMerger implementation
-│   ├── config/             # Viper config loader
-│   ├── logger/             # port.Logger implementation (slog-backed)
+│   ├── config/             # Viper config loader (produces domain.Config)
+│   ├── logger/             # port.Logger implementation
+│   │                       #   • Console: slog TextHandler → os.Stderr
+│   │                       #   • File: slog JSONHandler → lumberjack (rotation)
+│   │                       #   • Combined via slog.NewMultiHandler (Go 1.26+)
 │   └── progress/           # port.ProgressReporter implementation (mpb)
 ├── adapter/
 │   └── cli/                # Cobra commands; calls di.Build(), never imports infra directly
