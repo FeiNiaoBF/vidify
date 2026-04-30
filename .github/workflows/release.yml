@@ -1,0 +1,279 @@
+# Vidify release workflow
+#
+# Triggers on semver tags (e.g. v0.2.0).  For each supported platform it:
+#   1. Runs the full test suite (gate — release is blocked on red tests)
+#   2. Cross-compiles the vidify binary
+#   3. Downloads pre-built whisper-cli and ffmpeg static binaries
+#   4. Packages everything into a distributable archive
+#   5. Uploads archives + checksums.txt to the GitHub Release
+#
+# To cut a release:
+#   git tag -a v0.2.0 -m "Release v0.2.0"
+#   git push origin v0.2.0
+#
+# ─── Pinned third-party binary versions ────────────────────────────────────
+# whisper.cpp: https://github.com/ggerganov/whisper.cpp/releases
+#   Release zip contents per platform:
+#     linux-x64  : whisper-bin-x64.zip     → whisper-cli + libwhisper.so.* + libggml*.so.*
+#     linux-arm64: whisper-bin-arm64.zip   → whisper-cli + shared libs
+#     windows-x64: whisper-bin-win-x64.zip → whisper-cli.exe + *.dll
+#     darwin-*   : whisper-bin-macos.zip   → whisper-cli (universal binary)
+#
+# FFmpeg static builds:
+#   Linux/Windows: https://github.com/BtbN/FFmpeg-Builds (LGPL, static, rolling latest)
+#   macOS        : https://evermeet.cx/ffmpeg (LGPL, static, universal x86_64+arm64)
+# ───────────────────────────────────────────────────────────────────────────
+env:
+  # whisper.cpp release tag — update when a newer release is available
+  WHISPER_VERSION: v1.7.3
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # needed to create GitHub Releases and upload assets
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Gate — all tests must pass before any release artifact is built
+  # ──────────────────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test -race -count=1 ./...
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Build matrix — one job per (os / arch) platform
+  # ──────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner:   ubuntu-latest
+            goos:     linux
+            goarch:   amd64
+            ext:      ""
+
+          - platform: linux-arm64
+            runner:   ubuntu-latest
+            goos:     linux
+            goarch:   arm64
+            ext:      ""
+
+          - platform: windows-x64
+            runner:   ubuntu-latest   # cross-compile on Linux; avoids Windows runner cost
+            goos:     windows
+            goarch:   amd64
+            ext:      ".exe"
+
+          - platform: darwin-x64
+            runner:   macos-latest
+            goos:     darwin
+            goarch:   amd64
+            ext:      ""
+
+          - platform: darwin-arm64
+            runner:   macos-latest
+            goos:     darwin
+            goarch:   arm64
+            ext:      ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # ── 1. Compile vidify ────────────────────────────────────────────────
+      - name: Build vidify
+        env:
+          GOOS:        ${{ matrix.goos }}
+          GOARCH:      ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p dist/${{ matrix.platform }}
+          go build \
+            -ldflags "-X main.version=${VERSION}" \
+            -o dist/${{ matrix.platform }}/vidify${{ matrix.ext }} \
+            ./cmd/cli
+
+      # ── 2. Create runtime-tools skeleton ────────────────────────────────
+      - name: Create runtime-tools directories
+        run: |
+          mkdir -p dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
+          mkdir -p dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
+
+      # ── 3. Download whisper-cli + shared libs ────────────────────────────
+      # We extract ALL files from the zip so that shared libraries (.so / .dll /
+      # .dylib) land alongside the binary — whisper-cli requires them at runtime.
+      - name: Download whisper-cli (linux-x64)
+        if: matrix.platform == 'linux-x64'
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
+          curl -fsSL "${BASE}/whisper-bin-x64.zip" -o whisper.zip
+          unzip -j whisper.zip -d "${DEST}/"
+          chmod +x "${DEST}/whisper-cli"
+
+      - name: Download whisper-cli (linux-arm64)
+        if: matrix.platform == 'linux-arm64'
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
+          curl -fsSL "${BASE}/whisper-bin-arm64.zip" -o whisper.zip
+          unzip -j whisper.zip -d "${DEST}/"
+          chmod +x "${DEST}/whisper-cli"
+
+      - name: Download whisper-cli (windows-x64)
+        if: matrix.platform == 'windows-x64'
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
+          curl -fsSL "${BASE}/whisper-bin-win-x64.zip" -o whisper.zip
+          unzip -j whisper.zip -d "${DEST}/"
+
+      # whisper.cpp ships a single universal binary (x86_64 + arm64) for macOS.
+      # Both darwin-x64 and darwin-arm64 use the same whisper-bin-macos.zip.
+      - name: Download whisper-cli (darwin)
+        if: startsWith(matrix.platform, 'darwin')
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
+          curl -fsSL "${BASE}/whisper-bin-macos.zip" -o whisper.zip
+          unzip -j whisper.zip -d "${DEST}/"
+          chmod +x "${DEST}/whisper-cli"
+
+      # ── 4. Download ffmpeg (static builds — no DLLs required) ────────────
+      # BtbN rolling-latest static builds for Linux and Windows.
+      # Archive layout: ffmpeg-master-latest-<os>-lgpl/{bin/ffmpeg[.exe], ...}
+      # --strip-components=2 removes the root dir + "bin/" so ffmpeg lands
+      # directly in DEST.
+      - name: Download ffmpeg (linux-x64)
+        if: matrix.platform == 'linux-x64'
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+          curl -fsSL "${BASE}/ffmpeg-master-latest-linux64-lgpl.tar.xz" -o ffmpeg.tar.xz
+          tar -xf ffmpeg.tar.xz --strip-components=2 --wildcards "*/bin/ffmpeg" \
+            -C "${DEST}/"
+          chmod +x "${DEST}/ffmpeg"
+
+      - name: Download ffmpeg (linux-arm64)
+        if: matrix.platform == 'linux-arm64'
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+          curl -fsSL "${BASE}/ffmpeg-master-latest-linuxarm64-lgpl.tar.xz" -o ffmpeg.tar.xz
+          tar -xf ffmpeg.tar.xz --strip-components=2 --wildcards "*/bin/ffmpeg" \
+            -C "${DEST}/"
+          chmod +x "${DEST}/ffmpeg"
+
+      - name: Download ffmpeg (windows-x64)
+        if: matrix.platform == 'windows-x64'
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
+        run: |
+          BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+          curl -fsSL "${BASE}/ffmpeg-master-latest-win64-lgpl.zip" -o ffmpeg.zip
+          unzip -j ffmpeg.zip "*/bin/ffmpeg.exe" -d "${DEST}/"
+
+      # evermeet.cx provides a static universal binary (x86_64 + arm64) for macOS.
+      # Both darwin-x64 and darwin-arm64 use the same download.
+      - name: Download ffmpeg (darwin)
+        if: startsWith(matrix.platform, 'darwin')
+        env:
+          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
+        run: |
+          curl -fsSL "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o ffmpeg.zip
+          unzip -j ffmpeg.zip -d "${DEST}/"
+          chmod +x "${DEST}/ffmpeg"
+
+      # ── 5. Copy license file ─────────────────────────────────────────────
+      - name: Copy license file
+        run: cp THIRD_PARTY_LICENSES.md dist/${{ matrix.platform }}/
+
+      # ── 6. Package archive ───────────────────────────────────────────────
+      - name: Package archive (tar.gz — unix)
+        if: matrix.platform != 'windows-x64'
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ARCHIVE="vidify-${VERSION}-${{ matrix.platform }}.tar.gz"
+          cd dist && tar -czf "${ARCHIVE}" ${{ matrix.platform }}/
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Package archive (zip — windows)
+        if: matrix.platform == 'windows-x64'
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ARCHIVE="vidify-${VERSION}-${{ matrix.platform }}.zip"
+          cd dist && zip -r "${ARCHIVE}" ${{ matrix.platform }}/
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      # ── 7. Compute checksum ──────────────────────────────────────────────
+      - name: Compute SHA-256 checksum
+        run: |
+          cd dist
+          sha256sum "${{ env.ARCHIVE }}" > "${{ env.ARCHIVE }}.sha256"
+
+      # ── 8. Upload artifacts for the release job ──────────────────────────
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            dist/${{ env.ARCHIVE }}
+            dist/${{ env.ARCHIVE }}.sha256
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Publish — collect all artifacts and create the GitHub Release
+  # ──────────────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets/
+
+      - name: Merge checksums into one file
+        run: |
+          cat release-assets/*.sha256 > release-assets/checksums.txt
+          rm  release-assets/*.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/*
