@@ -266,7 +266,10 @@ func parseHHMMSScc(re *regexp.Regexp, line string) (time.Duration, bool) {
 // colons, and single quotes that can appear in normal file-system paths.
 func buildSubtitleFilter(srtPath, cacheDir string) (scriptPath string, cleanup func(), err error) {
 	// ffmpeg on Windows accepts forward-slash paths everywhere.
-	normalized := filepath.ToSlash(srtPath)
+	// filepath.ToSlash only rewrites the current OS separator, so on Linux/macOS
+	// it leaves Windows-style backslashes untouched. Normalize both forms so the
+	// generated script is stable across host OSes and matches FFmpeg expectations.
+	normalized := strings.ReplaceAll(filepath.ToSlash(srtPath), `\`, "/")
 
 	// Single-quotes inside the path would break the filter expression even in
 	// a script file; escape them with the libass convention (\').
