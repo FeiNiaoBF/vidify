@@ -140,9 +140,9 @@
 | 兼容性   | Windows、macOS、Linux 三平台                                        |
 | 隐私     | 全部本地运行，不收集任何用户数据                                    |
 | 易用性   | CLI 命令简洁；GUI 操作不超过 3 步                                   |
-| 资源占用 | 首次运行需下载 Whisper 模型（tiny≈75MB，large≈3GB），需明确提示用户 |
+| 资源占用 | Whisper 模型文件**不随发布包内置**（体积 tiny≈0.075 GB，large≈3 GB，并有多语言变体）；首次运行前需单独下载，应向用户明确提示 |
 | 错误处理 | 友好提示 + 完整日志                                                 |
-| 打包     | CLI 提供单文件可执行程序；GUI 提供 .exe / .app / AppImage           |
+| 打包     | CLI 提供单文件可执行程序（`whisper-cli`/`ffmpeg` **已内置**于 `runtime-tools/`）；GUI 提供 .exe / .app / AppImage；**Whisper 模型文件不随发布压缩包分发** |
 
 ---
 
@@ -150,8 +150,11 @@
 
 - **语言**：Go 1.26
 - **核心工具**：
-  - **Whisper.cpp**：通过 `os/exec` 调用官方预编译二进制（MVP 最简单可靠方式，后续可升级为 cgo binding）
-  - **FFmpeg**：通过 `os/exec` 调用（用户需安装或打包进安装包）
+  - **Whisper.cpp**：通过 `os/exec` 调用预编译二进制（MVP 最简单可靠方式，后续可升级为 cgo binding）
+    - `whisper-cli` **随发布包内置**于 `runtime-tools/whisper/<os>-<arch>/`
+    - 三段式解析：配置覆盖 → `runtime-tools` 内置 → 系统 PATH
+    - **Whisper 模型（`.bin` 文件）绝对不打包进任何发布压缩包**；模型最大开销数 GB 且包含多语言变体，应由用户单独下载存入 `~/.vidify/models/`
+  - **FFmpeg**：通过 `os/exec` 调用；**随发布包内置**于 `runtime-tools/ffmpeg/<os>-<arch>/`，支持配置覆盖和 PATH 回退
 - **GUI 框架**：Wails v2 + Svelte
 - **架构原则**：高内聚、低耦合、分层设计（Domain / UseCase / Infrastructure）
 - **项目结构**：`/cmd`（cli / gui）+ `/internal` 结构，保证 CLI 与 GUI 代码高度复用
@@ -179,3 +182,4 @@
 | Whisper.cpp 二进制跨平台兼容性    | 为每个平台提供预编译二进制             |
 | FFmpeg 在用户机器上的安装路径问题 | 启动时检测路径，提供安装引导           |
 | 大模型在低配机器的内存占用        | 默认使用 medium 模型，提供模型切换建议 |
+| 任务缓存内 `~/.vidify/cache/tasks/` 积累 | 成功则自动删除；失败保留以供排查 |

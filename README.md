@@ -46,8 +46,29 @@
 
 ### 前置依赖
 
-- [FFmpeg](https://ffmpeg.org/download.html)（需加入 `PATH`）
-- Whisper 模型文件（首次运行时需下载，tiny ≈ 75MB，large ≈ 3GB）
+**发布包（推荐）：**
+- `whisper-cli` 和 `ffmpeg` **已内置**于发布包 `runtime-tools/` 目录，无需额外安装
+- Whisper 模型文件**不随发布包分发**（最小几十 MB，最大数 GB；且含多语言变体），需单独下载：
+
+  ```bash
+  # 手动下载（替换 medium 为所需大小）
+  # 保存至 ~/.vidify/models/ggml-medium.bin
+  curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin \
+       -o ~/.vidify/models/ggml-medium.bin
+  ```
+
+  | 模型 | 大小 | 适用场景 |
+  |------|------|----------|
+  | tiny | ~75 MB | 快速测试 |
+  | base | ~142 MB | 日常使用 |
+  | small | ~466 MB | 均衡 |
+  | medium | ~1.5 GB | 推荐 |
+  | large | ~3 GB | 最高精度，需 8 GB+ RAM |
+
+**从源码构建（开发环境）：**
+- Go 1.26+
+- 系统已安装 `ffmpeg`（或通过配置 `ffmpeg-bin` 指定路径）
+- 模型文件同上
 
 ### 安装
 
@@ -82,6 +103,22 @@ vidify -i input.mp3 -l en --translate
 | `--bg-image` | | 背景图片路径 | 内置默认 |
 | `--output` | `-o` | 输出路径 | 当前目录 |
 
+### 二进制解析顺序
+
+`vidify` 按以下优先级定位 `whisper-cli` 和 `ffmpeg`：
+
+1. 配置文件 / 环境变量 / CLI 标志显式指定（最高优先级）
+   `whisper-bin: /path/to/whisper-cli`
+2. 发布包内置：可执行文件同级目录下 `runtime-tools/<tool>/<os>-<arch>/`
+3. 系统 `PATH`（回退）
+
+### 任务缓存
+
+每次处理任务都会在 `~/.vidify/cache/tasks/<task-id>/` 下创建隔离工作目录，用于存放中间产物（SRT 草稿、FFmpeg 滤镜脚本等）。
+
+- **任务成功**：缓存目录自动删除
+- **任务失败**：缓存目录保留，日志中可查看路径，便于排查问题
+
 ## 项目结构
 
 ```
@@ -98,7 +135,9 @@ vidify/
 │   ├── architecture.md     # 系统架构图
 │   └── process-flow.md     # 核心处理流程图
 ├── test/                   # 测试
-├── third_party/whisper/    # Whisper.cpp 预编译二进制
+├── runtime-tools/          # 随发布包内置的第三方二进制工具
+│   ├── whisper/            # Whisper.cpp 预编译二进制（按平台子目录）
+│   └── ffmpeg/             # FFmpeg 预编译二进制（按平台子目录）
 ├── Makefile
 ├── go.mod
 └── README.md

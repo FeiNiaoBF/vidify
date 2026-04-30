@@ -48,8 +48,13 @@ log:
   max-size: 100
 
 # ============================================================
-# Advanced: binary paths (leave empty to auto-detect)
+# Advanced: binary path overrides (leave empty for auto-detect)
 # ============================================================
+# By default Vidify finds whisper-cli and ffmpeg from:
+#   1. These config keys (highest priority)
+#   2. runtime-tools/<tool>/<platform>/ next to the vidify binary (bundled release)
+#   3. System PATH (fallback)
+# Only set these if you need a specific binary instead of the bundled one.
 
 # whisper-bin: ""
 # whisper-model-dir: ""
