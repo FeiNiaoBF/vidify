@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -142,24 +143,24 @@ func TestNew_LevelFilter(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		verbose   bool
+		level     slog.Level
 		wantDebug bool
 	}{
-		{name: "verbose true shows debug", verbose: true, wantDebug: true},
-		{name: "verbose false hides debug", verbose: false, wantDebug: false},
+		{name: "debug level shows debug", level: slog.LevelDebug, wantDebug: true},
+		{name: "info level hides debug", level: slog.LevelInfo, wantDebug: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var buf bytes.Buffer
-			log := New(&buf, tt.verbose)
+			log := New(&buf, tt.level)
 			log.Debug("sentinel-debug-message")
 
 			contains := strings.Contains(buf.String(), "sentinel-debug-message")
 			if contains != tt.wantDebug {
-				t.Errorf("verbose=%v: debug message present=%v, want %v\noutput: %s",
-					tt.verbose, contains, tt.wantDebug, buf.String())
+				t.Errorf("level=%v: debug message present=%v, want %v\noutput: %s",
+					tt.level, contains, tt.wantDebug, buf.String())
 			}
 		})
 	}
@@ -171,7 +172,7 @@ func TestWithError_NilSafety(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	log := New(&buf, true)
+	log := New(&buf, slog.LevelDebug)
 
 	returned := log.WithError(nil)
 	if returned != log {
@@ -191,7 +192,7 @@ func TestWithError_AttachesField(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	log := New(&buf, true)
+	log := New(&buf, slog.LevelDebug)
 	log.WithError(errors.New("something went wrong")).Error("operation failed")
 
 	out := buf.String()
@@ -212,7 +213,7 @@ func TestNewWithConfig_ConsoleOnly(t *testing.T) {
 	// We can't easily intercept os.Stderr in NewWithConfig, so we test the
 	// level/format logic through New which shares the same handler construction.
 	var buf bytes.Buffer
-	log := New(&buf, false) // info level, console only
+	log := New(&buf, slog.LevelInfo) // info level, console only
 
 	log.Debug("should-not-appear")
 	log.Info("should-appear")

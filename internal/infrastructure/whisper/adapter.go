@@ -39,8 +39,20 @@ func (a *Adapter) Transcribe(ctx context.Context, audio domain.Audio, cfg domain
 	// Whisper.cpp expects "ggml-<model>.bin" in the model directory.
 	modelFile := filepath.Join(cfg.WhisperModelDir, fmt.Sprintf("ggml-%s.bin", cfg.Model))
 	if _, err := os.Stat(modelFile); os.IsNotExist(err) {
-		return domain.Subtitle{}, errors.Wrapf(domain.ErrModelNotFound,
-			"model file %q does not exist — download it first", modelFile)
+		// Print an actionable, multi-line error so the user knows exactly what
+		// to do without reading documentation.
+		return domain.Subtitle{}, fmt.Errorf(
+			"%w\n\n"+
+				"  Model file : %s\n"+
+				"  Models dir : %s\n"+
+				"  Download   : vidify model download --model %s\n"+
+				"  Manual URL : https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-%s.bin",
+			domain.ErrModelNotFound,
+			modelFile,
+			cfg.WhisperModelDir,
+			cfg.Model,
+			cfg.Model,
+		)
 	}
 
 	// Determine output directory: prefer config output dir, fallback to audio's dir.
@@ -50,8 +62,10 @@ func (a *Adapter) Transcribe(ctx context.Context, audio domain.Audio, cfg domain
 	}
 
 	// whisper-cli writes <output_file>.srt automatically when --output-srt is used.
+	// Use a collision-safe base name so batch runs never overwrite each other's SRT.
 	baseName := strings.TrimSuffix(filepath.Base(audio.Path), filepath.Ext(audio.Path))
-	outputFile := filepath.Join(outputDir, baseName)
+	outputBase := safeOutputBase(outputDir, baseName)
+	outputFile := filepath.Join(outputDir, outputBase)
 
 	// Assemble the whisper-cli arguments.
 	args := []string{
@@ -108,4 +122,18 @@ func (a *Adapter) Transcribe(ctx context.Context, audio domain.Audio, cfg domain
 		SRTPath:  srtPath,
 		Language: detectedLang,
 	}, nil
+}
+
+// safeOutputBase returns a base filename (without extension) that does not
+// already exist with a .srt suffix in dir. It appends _1, _2, … on conflict.
+func safeOutputBase(dir, base string) string {
+	candidate := base
+	for i := 1; i < 1000; i++ {
+		srt := filepath.Join(dir, candidate+".srt")
+		if _, err := os.Stat(srt); os.IsNotExist(err) {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s_%d", base, i)
+	}
+	return base
 }

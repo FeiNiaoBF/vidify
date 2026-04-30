@@ -23,5 +23,18 @@ var (
 	ErrMergeFailed = errors.New("video merge failed")
 
 	// ErrInvalidConfig indicates the provided configuration is not valid.
+	//
+	// Deprecated: prefer ErrMissingInput or ErrInvalidModel for new code;
+	// this sentinel is kept so existing errors.Is checks continue to work.
 	ErrInvalidConfig = errors.New("invalid configuration")
+
+	// ErrMissingInput indicates that no input path was provided.
+	ErrMissingInput = errors.New("input path is required")
+
+	// ErrInvalidModel indicates that the supplied model name is not a known
+	// Whisper model size (tiny, base, small, medium, large).
+	ErrInvalidModel = errors.New("invalid whisper model")
+
+	// ErrNoFFmpeg indicates that the ffmpeg binary could not be located.
+	ErrNoFFmpeg = errors.New("ffmpeg binary not found")
 )

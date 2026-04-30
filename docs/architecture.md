@@ -74,7 +74,7 @@ Use Case 显式化：每个主要业务流程都有独立的 Use Case（Transcri
 
 ## 项目目录结构简要
 
-```
+```text
 internal/
 ├── domain/
 │   ├── port/               # driving.go (Processor, Result) + driven.go (Transcriber, VideoMerger, ProgressReporter, Logger)
@@ -89,6 +89,7 @@ internal/
 │   │   └── render.go
 │   └── service.go
 ├── infrastructure/
+│   ├── appdir/             # App data directory authority (~/.vidify/* paths)
 │   ├── whisper/            # port.Transcriber implementation
 │   ├── ffmpeg/             # port.VideoMerger implementation
 │   ├── config/             # Viper config loader (produces domain.Config)

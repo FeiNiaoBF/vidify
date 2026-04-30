@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -26,14 +28,28 @@ type Audio struct {
 }
 
 // NewAudio creates an Audio value from a file path.
-// It validates that the extension is in the supported set.
+// It normalises the path to absolute, validates the extension, and confirms
+// the file exists on disk before returning.
 func NewAudio(path string) (Audio, error) {
-	ext := strings.ToLower(filepath.Ext(path))
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return Audio{}, fmt.Errorf("resolve path: %w", err)
+	}
+
+	ext := strings.ToLower(filepath.Ext(absPath))
 	if !supportedFormats[ext] {
 		return Audio{}, ErrUnsupportedFormat
 	}
+
+	if _, err := os.Stat(absPath); err != nil {
+		if os.IsNotExist(err) {
+			return Audio{}, fmt.Errorf("%w: %s", ErrFileNotFound, absPath)
+		}
+		return Audio{}, fmt.Errorf("stat %q: %w", absPath, err)
+	}
+
 	return Audio{
-		Path:   path,
+		Path:   absPath,
 		Format: ext,
 	}, nil
 }

@@ -66,10 +66,10 @@ type Config struct {
 // Validate checks that required fields are present and values are valid.
 func (c *Config) Validate() error {
 	if c.InputPath == "" {
-		return ErrInvalidConfig
+		return ErrMissingInput
 	}
 	if !IsValidModel(string(c.Model)) {
-		return ErrInvalidConfig
+		return ErrInvalidModel
 	}
 	return nil
 }

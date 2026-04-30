@@ -18,6 +18,7 @@ import (
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/FeiNiaoBF/vidify/internal/domain/port"
+	"github.com/FeiNiaoBF/vidify/internal/infrastructure/appdir"
 )
 
 // Default values applied when Config fields are zero.
@@ -68,15 +69,11 @@ type slogLogger struct {
 var _ port.Logger = (*slogLogger)(nil)
 var _ io.Closer = (*slogLogger)(nil)
 
-// New creates a port.Logger writing to w with a plain TextHandler.
-// When verbose is true the level is set to Debug; otherwise Info.
+// New creates a port.Logger writing to w with a plain TextHandler at the given level.
+// Pass slog.LevelDebug for verbose output or slog.LevelInfo for normal output.
 // This is a lightweight helper for tests and simple integrations; production
 // code should use NewWithConfig for full dual-output and rotation support.
-func New(w io.Writer, verbose bool) port.Logger {
-	level := slog.LevelInfo
-	if verbose {
-		level = slog.LevelDebug
-	}
+func New(w io.Writer, level slog.Level) port.Logger {
 	opts := &slog.HandlerOptions{Level: level}
 	return &slogLogger{inner: slog.New(slog.NewTextHandler(w, opts))}
 }
@@ -155,7 +152,7 @@ func buildFileHandler(cfg Config, opts *slog.HandlerOptions) (slog.Handler, erro
 // three fields to detect a fully-zero (never-configured) struct:
 //
 //	Dir   ToFile  MaxBackups │ result
-//	──────────────────────────┼──────────────────────────────────────────
+//	─────────────────────────┼──────────────────────────────────────────
 //	""    false   0          │ ToFile → true  (fully-zero: apply defaults)
 //	""    false   N>0        │ ToFile stays false  (explicit false + other fields set)
 //	""    true    any        │ ToFile stays true   (explicit true)
@@ -185,11 +182,9 @@ func applyDefaults(cfg *Config) {
 // If dir is empty, it returns the default log directory ~/.vidify/logs.
 func expandDir(dir string) (string, error) {
 	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home directory: %w", err)
-		}
-		return filepath.Join(home, ".vidify", "logs"), nil
+		// Delegate to appdir so the log directory is always co-located with
+		// the rest of the application data under ~/.vidify/logs.
+		return appdir.Logs()
 	}
 	// Accept both Unix ("~/") and Windows ("~\\") tilde prefixes.
 	if strings.HasPrefix(dir, "~/") || strings.HasPrefix(dir, `~\`) {

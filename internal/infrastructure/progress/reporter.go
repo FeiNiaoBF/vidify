@@ -45,9 +45,11 @@ func (r *Reporter) Update(current int64) {
 }
 
 // Finish completes the current bar and marks it done.
+// mpb v8 requires SetTotal(-1, true) to signal completion; Abort() marks the
+// bar as aborted (red / dropped), not as successfully finished.
 func (r *Reporter) Finish() {
 	if r.bar != nil {
-		r.bar.Abort(false) // false = complete normally, don't drop
+		r.bar.SetTotal(-1, true)
 	}
 }
 

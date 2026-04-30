@@ -15,7 +15,8 @@ internal/di/               → Composition root (wire.go — only place that imp
 internal/application/      → Application layer (Service, use cases — no infra imports)
 internal/domain/           → Domain layer (models + port interfaces, zero external deps)
 internal/domain/port/      → Port interfaces (Processor, Transcriber, VideoMerger, ProgressReporter, Logger)
-internal/infrastructure/   → Infrastructure layer (Whisper, FFmpeg, Config, Logger, Progress adapters)
+internal/infrastructure/   → Infrastructure layer (Whisper, FFmpeg, Config, Logger, Progress, AppDir adapters)
+internal/infrastructure/appdir/ → App data directory authority — single source for all ~/.vidify/* paths
 internal/common/           → Shared utilities (errors, helpers — no domain or infra imports)
 ```
 
@@ -75,7 +76,9 @@ internal/common/           → Shared utilities (errors, helpers — no domain o
 - Processing flags: `-i/--input`, `-m/--model`, `-l/--language`, `--translate`, `--bg-image`, `-o/--output`
 - Logging flags: `--log-dir`, `--log-level`, `--log-to-file`, `--log-max-backups`, `--log-max-age`
 - Shortcut: `-v/--verbose` sets `--log-level debug`
-- Viper binds to config file (`~/.vidify.yaml`) under `log:` block and environment variables (`VIDIFY_*`)
+- Viper binds to config file (`~/.vidify/config.yaml`) under `log:` block and environment variables (`VIDIFY_*`)
+- Config file search order: `--config` flag → `~/.vidify/config.yaml` → `~/.vidify.yaml` (legacy) → `./.vidify.yaml`
+- `vidify init` creates `~/.vidify/` directory tree + writes `config.yaml`
 
 ## External Tool Calls
 

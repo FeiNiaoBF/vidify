@@ -26,4 +26,17 @@ tidy:
 lint:
 	go vet ./...
 
-.PHONY: build run test clean tidy lint
+# Format all Go source files.
+fmt:
+	gofmt -w ./...
+
+# Run vidify init to set up ~/.vidify/ app directories and default config.
+init:
+	go run $(CLI_ENTRY) init
+
+# Run tests with race detection and generate an HTML coverage report.
+cover:
+	go test -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
+.PHONY: build run test clean tidy lint fmt init cover

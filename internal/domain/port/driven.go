@@ -22,6 +22,10 @@ type VideoMerger interface {
 
 // ProgressReporter is the driven port for reporting task progress.
 // CLI uses an mpb bar; GUI can use a WebSocket event emitter — both implement this.
+//
+// Wait() is deliberately absent: blocking until all bars flush is a
+// terminal-rendering concern (specific to mpb) that a GUI implementation
+// would never need. Callers that require it type-assert to interface{ Wait() }.
 type ProgressReporter interface {
 	// Start begins a new progress phase with an expected total unit count.
 	Start(phase string, total int64)
@@ -31,10 +35,6 @@ type ProgressReporter interface {
 
 	// Finish marks the current phase as complete.
 	Finish()
-
-	// Wait blocks until all progress operations have flushed to the output.
-	// Call this before the program exits to ensure clean terminal output.
-	Wait()
 }
 
 // Logger is the driven port for structured logging.
