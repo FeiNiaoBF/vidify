@@ -61,6 +61,19 @@ type Config struct {
 
 	// Verbose enables debug-level logging output.
 	Verbose bool
+
+	// TaskID is a UUID assigned per-run by the application service.
+	// It is used to create an isolated task cache directory and to correlate
+	// log entries to a single processing invocation.
+	// Infrastructure adapters must treat it as read-only.
+	TaskID string
+
+	// TaskCacheDir is the absolute path to this task's working directory
+	// (~/.vidify/cache/tasks/<TaskID>/). Adapters write all intermediate files
+	// here so they are cleaned up as a unit when the task finishes.
+	// Empty string means no cache directory has been allocated (e.g. in tests);
+	// adapters fall back to os.TempDir() when this field is unset.
+	TaskCacheDir string
 }
 
 // Validate checks that required fields are present and values are valid.

@@ -58,6 +58,29 @@ func Backgrounds() (string, error) {
 	return subdir("backgrounds")
 }
 
+// TasksDir returns the path to the task cache root (~/.vidify/cache/tasks),
+// creating it if it does not already exist. All per-task temporary files live
+// under this directory, isolated by task ID.
+func TasksDir() (string, error) {
+	return subdir(filepath.Join("cache", "tasks"))
+}
+
+// TaskDir returns the path to a single task's working directory
+// (~/.vidify/cache/tasks/<taskID>), creating it if it does not already exist.
+// Callers use this directory for any intermediate files (SRT drafts, FFmpeg
+// filter scripts) that must not outlive the task.
+func TaskDir(taskID string) (string, error) {
+	tasks, err := TasksDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(tasks, taskID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("appdir: create task directory %s: %w", taskID, err)
+	}
+	return dir, nil
+}
+
 // DefaultBackground returns the expected path of the default background
 // image (~/.vidify/assets/background.jpg). The file may not exist yet;
 // callers must check with os.Stat before attempting to use it.
@@ -81,7 +104,7 @@ func EnsureAll() error {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return fmt.Errorf("appdir: create root directory: %w", err)
 	}
-	for _, name := range []string{"logs", "models", "assets", "backgrounds"} {
+	for _, name := range []string{"logs", "models", "assets", "backgrounds", filepath.Join("cache", "tasks")} {
 		if _, err := subdir(name); err != nil {
 			return err
 		}

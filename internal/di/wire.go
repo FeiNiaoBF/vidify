@@ -103,15 +103,19 @@ func Build(v *viper.Viper, whisperBin, ffmpegBin string) (*Container, error) {
 	}
 	log := logger.NewWithConfig(logCfg)
 
-	whisperAdapter := whisper.NewAdapter(log)
+	progressReporter := progress.NewReporter()
+	whisperAdapter := whisper.NewAdapter(log, progressReporter)
 	// ffmpeg.NewAdapter no longer takes a defaultBG — background fallback is
 	// handled inside Merge() itself (lavfi colour source when no image exists).
-	ffmpegAdapter := ffmpeg.NewAdapter(log)
-	progressReporter := progress.NewReporter()
+	ffmpegAdapter := ffmpeg.NewAdapter(log, progressReporter)
 
 	transcribeUC := usecase.NewTranscribe(whisperAdapter, progressReporter, log)
 	renderUC := usecase.NewRender(ffmpegAdapter, progressReporter, log)
-	svc := application.NewService(transcribeUC, renderUC, log)
+	// appdir.TaskDir is the composition-root's bridge between the application
+	// layer (which must not import infrastructure) and the appdir package.
+	// The service receives it as a plain function value so the dependency
+	// direction stays correct.
+	svc := application.NewService(transcribeUC, renderUC, log, appdir.TaskDir)
 
 	// Type-assert the logger to io.Closer. The slogLogger struct satisfies
 	// io.Closer (lumberjack.Logger underneath), but the port.Logger interface

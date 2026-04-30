@@ -24,6 +24,11 @@ type Service struct {
 	transcribe *usecase.Transcribe
 	render     *usecase.Render
 	logger     port.Logger
+	// taskDirFn allocates a per-task working directory given a task ID.
+	// It is injected from di/wire.go so the application layer never imports
+	// infrastructure packages directly.
+	// When nil, no task-level cache directory is used.
+	taskDirFn func(taskID string) (string, error)
 }
 
 // Compile-time proof that *Service satisfies the driving port.
@@ -33,15 +38,21 @@ var _ port.Processor = (*Service)(nil)
 // NewService creates an application service wired with the given use cases.
 // Accepting composed use cases (not raw ports) keeps the constructor honest
 // about what Service actually needs to do its job.
+//
+// taskDirFn is optional. When provided it allocates an isolated working
+// directory for each task (used to store intermediate files and cleaned up on
+// success). Pass nil to disable task-level caching (useful in tests).
 func NewService(
 	transcribe *usecase.Transcribe,
 	render *usecase.Render,
 	logger port.Logger,
+	taskDirFn func(taskID string) (string, error),
 ) *Service {
 	return &Service{
 		transcribe: transcribe,
 		render:     render,
 		logger:     logger,
+		taskDirFn:  taskDirFn,
 	}
 }
 
@@ -68,16 +79,47 @@ func (s *Service) ProcessFile(ctx context.Context, cfg domain.Config) port.Resul
 		}
 	}
 
+	// Stamp the task ID so adapters can use it for per-task isolation.
+	cfg.TaskID = taskID
+
+	// Allocate a per-task cache directory if a factory function was injected.
+	// On failure we log a warning and continue without a cache dir — degraded
+	// but functional (adapters fall back to os.TempDir()).
+	if s.taskDirFn != nil {
+		cacheDir, err := s.taskDirFn(taskID)
+		if err != nil {
+			log.WithError(err).Warn("could not allocate task cache directory — using OS temp")
+		} else {
+			cfg.TaskCacheDir = cacheDir
+		}
+	}
+
 	// Stage 1: Transcribe audio → SRT subtitles.
 	tOut, err := s.transcribe.Execute(ctx, usecase.TranscribeInput{Audio: audio, Config: cfg})
 	if err != nil {
+		// Failure: retain task cache so the user can inspect intermediate files.
+		if cfg.TaskCacheDir != "" {
+			log.Warn("task failed — cache retained for inspection", "cache", cfg.TaskCacheDir)
+		}
 		return port.Result{TaskID: taskID, InputPath: cfg.InputPath, Err: err}
 	}
 
 	// Stage 2: Render audio + subtitles + background → MP4.
 	rOut, err := s.render.Execute(ctx, usecase.RenderInput{Audio: audio, Subtitle: tOut.Subtitle, Config: cfg})
 	if err != nil {
+		// Failure: retain task cache so the user can inspect intermediate files.
+		if cfg.TaskCacheDir != "" {
+			log.Warn("task failed — cache retained for inspection", "cache", cfg.TaskCacheDir)
+		}
 		return port.Result{TaskID: taskID, InputPath: cfg.InputPath, Err: err}
+	}
+
+	// Success: remove the task cache directory to avoid unbounded disk growth.
+	// The failure is logged but non-fatal — the user still gets their video.
+	if cfg.TaskCacheDir != "" {
+		if err := os.RemoveAll(cfg.TaskCacheDir); err != nil {
+			log.WithError(err).Warn("could not remove task cache directory", "cache", cfg.TaskCacheDir)
+		}
 	}
 
 	log.Info("processing complete", "output", rOut.Video.OutputPath)

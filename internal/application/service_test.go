@@ -97,7 +97,8 @@ func newTestService(t *testing.T, spy *spyLogger, tr port.Transcriber, mr port.V
 	t.Helper()
 	tc := usecase.NewTranscribe(tr, &stubProgress{}, spy)
 	rc := usecase.NewRender(mr, &stubProgress{}, spy)
-	return NewService(tc, rc, spy)
+	// Pass nil taskDirFn — tests do not need a persistent cache directory.
+	return NewService(tc, rc, spy, nil)
 }
 
 // ---- tests -----------------------------------------------------------------
