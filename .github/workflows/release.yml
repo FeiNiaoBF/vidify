@@ -25,7 +25,7 @@
 # ───────────────────────────────────────────────────────────────────────────
 env:
   # whisper.cpp release tag — update when a newer release is available
-  WHISPER_VERSION: v1.7.3
+  WHISPER_VERSION: v1.8.4
 
 on:
   push:
@@ -55,7 +55,10 @@ jobs:
         run: go test -race -count=1 ./...
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Build matrix — one job per (os / arch) platform
+  # Build matrix — test-release currently ships windows-x64 only.
+  # Reason: current upstream whisper.cpp prebuilt releases provide
+  # Windows artifacts but not stable Linux/macOS bundles for our packaging flow.
+  # We can re-enable other platforms when a reliable source is pinned.
   # ──────────────────────────────────────────────────────────────────────────
   build:
     name: Build ${{ matrix.platform }}
@@ -65,35 +68,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: linux-x64
-            runner:   ubuntu-latest
-            goos:     linux
-            goarch:   amd64
-            ext:      ""
-
-          - platform: linux-arm64
-            runner:   ubuntu-latest
-            goos:     linux
-            goarch:   arm64
-            ext:      ""
-
           - platform: windows-x64
             runner:   ubuntu-latest   # cross-compile on Linux; avoids Windows runner cost
             goos:     windows
             goarch:   amd64
             ext:      ".exe"
-
-          - platform: darwin-x64
-            runner:   macos-latest
-            goos:     darwin
-            goarch:   amd64
-            ext:      ""
-
-          - platform: darwin-arm64
-            runner:   macos-latest
-            goos:     darwin
-            goarch:   arm64
-            ext:      ""
 
     steps:
       - name: Checkout
@@ -127,74 +106,21 @@ jobs:
       # ── 3. Download whisper-cli + shared libs ────────────────────────────
       # We extract ALL files from the zip so that shared libraries (.so / .dll /
       # .dylib) land alongside the binary — whisper-cli requires them at runtime.
-      - name: Download whisper-cli (linux-x64)
-        if: matrix.platform == 'linux-x64'
-        env:
-          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
-        run: |
-          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
-          curl -fsSL "${BASE}/whisper-bin-x64.zip" -o whisper.zip
-          unzip -j whisper.zip -d "${DEST}/"
-          chmod +x "${DEST}/whisper-cli"
-
-      - name: Download whisper-cli (linux-arm64)
-        if: matrix.platform == 'linux-arm64'
-        env:
-          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
-        run: |
-          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
-          curl -fsSL "${BASE}/whisper-bin-arm64.zip" -o whisper.zip
-          unzip -j whisper.zip -d "${DEST}/"
-          chmod +x "${DEST}/whisper-cli"
-
       - name: Download whisper-cli (windows-x64)
         if: matrix.platform == 'windows-x64'
         env:
           DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
         run: |
-          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
-          curl -fsSL "${BASE}/whisper-bin-win-x64.zip" -o whisper.zip
+          BASE="https://github.com/ggml-org/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
+          curl -fsSL "${BASE}/whisper-bin-x64.zip" -o whisper.zip
           unzip -j whisper.zip -d "${DEST}/"
-
-      # whisper.cpp ships a single universal binary (x86_64 + arm64) for macOS.
-      # Both darwin-x64 and darwin-arm64 use the same whisper-bin-macos.zip.
-      - name: Download whisper-cli (darwin)
-        if: startsWith(matrix.platform, 'darwin')
-        env:
-          DEST: dist/${{ matrix.platform }}/runtime-tools/whisper/${{ matrix.platform }}
-        run: |
-          BASE="https://github.com/ggerganov/whisper.cpp/releases/download/${{ env.WHISPER_VERSION }}"
-          curl -fsSL "${BASE}/whisper-bin-macos.zip" -o whisper.zip
-          unzip -j whisper.zip -d "${DEST}/"
-          chmod +x "${DEST}/whisper-cli"
+          test -f "${DEST}/whisper-cli.exe"
 
       # ── 4. Download ffmpeg (static builds — no DLLs required) ────────────
       # BtbN rolling-latest static builds for Linux and Windows.
       # Archive layout: ffmpeg-master-latest-<os>-lgpl/{bin/ffmpeg[.exe], ...}
       # --strip-components=2 removes the root dir + "bin/" so ffmpeg lands
       # directly in DEST.
-      - name: Download ffmpeg (linux-x64)
-        if: matrix.platform == 'linux-x64'
-        env:
-          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
-        run: |
-          BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
-          curl -fsSL "${BASE}/ffmpeg-master-latest-linux64-lgpl.tar.xz" -o ffmpeg.tar.xz
-          tar -xf ffmpeg.tar.xz --strip-components=2 --wildcards "*/bin/ffmpeg" \
-            -C "${DEST}/"
-          chmod +x "${DEST}/ffmpeg"
-
-      - name: Download ffmpeg (linux-arm64)
-        if: matrix.platform == 'linux-arm64'
-        env:
-          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
-        run: |
-          BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
-          curl -fsSL "${BASE}/ffmpeg-master-latest-linuxarm64-lgpl.tar.xz" -o ffmpeg.tar.xz
-          tar -xf ffmpeg.tar.xz --strip-components=2 --wildcards "*/bin/ffmpeg" \
-            -C "${DEST}/"
-          chmod +x "${DEST}/ffmpeg"
-
       - name: Download ffmpeg (windows-x64)
         if: matrix.platform == 'windows-x64'
         env:
@@ -203,17 +129,7 @@ jobs:
           BASE="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
           curl -fsSL "${BASE}/ffmpeg-master-latest-win64-lgpl.zip" -o ffmpeg.zip
           unzip -j ffmpeg.zip "*/bin/ffmpeg.exe" -d "${DEST}/"
-
-      # evermeet.cx provides a static universal binary (x86_64 + arm64) for macOS.
-      # Both darwin-x64 and darwin-arm64 use the same download.
-      - name: Download ffmpeg (darwin)
-        if: startsWith(matrix.platform, 'darwin')
-        env:
-          DEST: dist/${{ matrix.platform }}/runtime-tools/ffmpeg/${{ matrix.platform }}
-        run: |
-          curl -fsSL "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o ffmpeg.zip
-          unzip -j ffmpeg.zip -d "${DEST}/"
-          chmod +x "${DEST}/ffmpeg"
+          test -f "${DEST}/ffmpeg.exe"
 
       # ── 5. Copy license file ─────────────────────────────────────────────
       - name: Copy license file
