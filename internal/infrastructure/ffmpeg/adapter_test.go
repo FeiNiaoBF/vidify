@@ -42,7 +42,7 @@ func TestBuildSubtitleFilter(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			scriptPath, cleanup, err := buildSubtitleFilter(tt.srtPath)
+			scriptPath, cleanup, err := buildSubtitleFilter(tt.srtPath, "")
 			if err != nil {
 				t.Fatalf("buildSubtitleFilter(%q): unexpected error: %v", tt.srtPath, err)
 			}
