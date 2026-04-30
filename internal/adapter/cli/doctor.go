@@ -34,8 +34,12 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	fmt.Println("Vidify environment check")
 	fmt.Println(strings.Repeat("─", 40))
 
-	checkBinary("whisper-cli", resolveWhisperBin(), "--version")
-	checkBinary("ffmpeg", resolveFFmpegBin(), "-version")
+	checkBinary("whisper-cli", resolveWhisperBin(), "--version",
+		"ensure runtime-tools/whisper/<platform>/whisper-cli is next to the vidify binary\n"+
+			"      (from your release archive), or set whisper-bin in ~/.vidify/config.yaml")
+	checkBinary("ffmpeg", resolveFFmpegBin(), "-version",
+		"ensure runtime-tools/ffmpeg/<platform>/ffmpeg is next to the vidify binary\n"+
+			"      (from your release archive), or set ffmpeg-bin in ~/.vidify/config.yaml")
 	checkDir("~/.vidify/", vidifyDir)
 	checkModels(filepath.Join(vidifyDir, "models"))
 	checkDir("~/.vidify/logs/", filepath.Join(vidifyDir, "logs"))
@@ -45,11 +49,12 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 
 // checkBinary verifies that the binary exists and, if so, runs a version flag
 // to confirm the binary is executable. The first line of output is printed.
-func checkBinary(label, bin, versionFlag string) {
+// fixHint is shown to the user when the binary cannot be found.
+func checkBinary(label, bin, versionFlag, fixHint string) {
 	if _, err := os.Stat(bin); os.IsNotExist(err) {
 		// Stat failed — the path is bare (not bundled). Try PATH lookup.
 		if _, err := exec.LookPath(bin); err != nil {
-			printCheck(false, label, "not found — install or set --"+strings.ToLower(label)+"-bin")
+			printCheck(false, label, "not found — "+fixHint)
 			return
 		}
 	}

@@ -137,10 +137,10 @@ func initConfig() {
 	viper.ReadInConfig() //nolint:errcheck
 }
 
-// resolveWhisperBin finds the whisper-cli binary. It checks:
-// 1. Explicit viper config (whisper-bin key)
-// 2. third_party/whisper/<platform>/ relative to the executable
-// 3. Falls back to the bare binary name (expects it on PATH)
+// resolveWhisperBin finds the whisper-cli binary. Resolution order:
+//  1. Explicit config override (whisper-bin key via flag/env/config file)
+//  2. Bundled binary at runtime-tools/whisper/<platform>/ next to the executable
+//  3. Bare binary name — last-resort PATH lookup
 //
 // This logic lives in the CLI adapter because bundled-binary discovery
 // is a deployment concern, not a domain or config-mapping concern.
@@ -149,20 +149,19 @@ func resolveWhisperBin() string {
 		return bin
 	}
 
-	// Try to find whisper-cli next to the executable.
-	// This supports the bundled distribution where whisper binaries
-	// ship inside third_party/whisper/<os>-<arch>/.
+	// Check for whisper-cli bundled alongside the executable.
+	// Release artifacts ship whisper-cli inside runtime-tools/whisper/<os>-<arch>/.
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
 		platform := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
 
-		// Map GOARCH to our directory naming convention.
+		// Normalise amd64 to the x64 label used in release artifact directory names.
 		if runtime.GOARCH == "amd64" {
 			platform = runtime.GOOS + "-x64"
 		}
 
-		candidate := filepath.Join(exeDir, "third_party", "whisper", platform, whisperBinaryName())
+		candidate := filepath.Join(exeDir, "runtime-tools", "whisper", platform, whisperBinaryName())
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
@@ -179,15 +178,17 @@ func whisperBinaryName() string {
 	return "whisper-cli"
 }
 
-// resolveFFmpegBin finds the ffmpeg binary. It checks:
-//  1. Explicit viper config (ffmpeg-bin key)
-//  2. third_party/ffmpeg/<platform>/ relative to the executable
-//  3. Falls back to the bare binary name (expects it on PATH)
+// resolveFFmpegBin finds the ffmpeg binary. Resolution order:
+//  1. Explicit config override (ffmpeg-bin key via flag/env/config file)
+//  2. Bundled binary at runtime-tools/ffmpeg/<platform>/ next to the executable
+//  3. Bare binary name — last-resort PATH lookup
 func resolveFFmpegBin() string {
 	if bin := viper.GetString("ffmpeg-bin"); bin != "" {
 		return bin
 	}
 
+	// Check for ffmpeg bundled alongside the executable.
+	// Release artifacts ship ffmpeg inside runtime-tools/ffmpeg/<os>-<arch>/.
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
@@ -196,7 +197,7 @@ func resolveFFmpegBin() string {
 			platform = runtime.GOOS + "-x64"
 		}
 
-		candidate := filepath.Join(exeDir, "third_party", "ffmpeg", platform, ffmpegBinaryName())
+		candidate := filepath.Join(exeDir, "runtime-tools", "ffmpeg", platform, ffmpegBinaryName())
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
