@@ -1,6 +1,6 @@
 # Vidify 🎧➡️🎬
 
-一个简单的个人 Go 项目，用于将音频文件（如 MP3, WAV）通过 Whisper.cpp 生成字幕，并使用 FFmpeg 将音频和字幕合并成一个带字幕的视频文件（MP4）。
+Vidify 是一个长期维护的个人 Go CLI 项目，目标是将本地音频转录为以同步文本为主体的 MP4 视频，并同时输出标准 SRT。MVP 的产品边界与工程决策见 [ADR 0001：MVP 产品与工程决策](docs/adr/0001-mvp-product-and-pipeline.md)。仓库目前已提供 `process` 命令入口及帮助；参数解析与媒体处理尚未实现，文中的完整调用示例仍是目标用法。
 
 **灵感来源:** 为类似 EnglishPod 的音频资源自动创建视频版本。（主要从一个Java项目中得到的灵感，想着可以自己做一个类似的功能）
 
@@ -26,18 +26,13 @@ cd vidify
 go build -o vidify .
 ```
 
-# 3. 使用
-```bash
-./vidify process -i <foo.mp3> -o <foo.mp4> -m <ggml-base.en.bin> [其他选项...]
+# 3. 计划用法（尚未实现）
+
+```sh
+./vidify process recording.m4a --model ./models/ggml-base.en.bin --output-dir ./out
 ```
 
-(TODO)主要选项:
-- `-i, --input`: 必需, 输入音频文件。
-- `-o, --output`: 必需, 输出视频文件。
-- `-m, --model`: 必需, Whisper 模型文件路径。
-- `--whisper-bin`: (可选) Whisper.cpp 可执行文件路径 (如果不在 PATH 中)。
-- `--ffmpeg-bin`: (可选) FFmpeg 可执行文件路径 (如果不在 PATH 中)。
-- `-s, --srt`: (可选) 指定 SRT 字幕输出路径。
+命令接口与首轮验收见 [MVP 命令行契约](docs/cli-contract.md)。输入使用一个位置参数，模型与输出目录显式指定；其它选项随对应功能接入。
 
 # License
 

@@ -7,15 +7,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "vidify",
-	Short: "vidify is a tool to create videos from audio",
-	Long: `vidify is a tool to create videos from audio. Use whisper to generate subtitles from audio, and then use ffmpeg to create videos.`,
+func newRootCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "vidify",
+		Short:         "Create subtitle videos from audio",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+	}
+	cmd.AddCommand(newProcessCommand())
+	return cmd
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Execute failed:", err)
+	if err := newRootCommand().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 }
