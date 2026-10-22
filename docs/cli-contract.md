@@ -1,6 +1,10 @@
 # MVP 命令行契约
 
-状态：端到端切片已实现。`process` 接受一个音频位置参数、`--model`、`--output-dir`，可选 `--ffmpeg-bin` 与 `--whisper-bin`；当前实现调用 FFmpeg、ffprobe 和 whisper.cpp，生成 SRT 与按累积文本分页的 ASS 字幕 MP4。真实英语样本已手动验证；完整 MVP 尚未完成。
+本文说明当前源码的 `process` 行为，供使用者查阅命令、处理失败，也供维护者定位实现。音频转录、SRT、ASS 累积分页和 MP4 渲染的端到端切片已实现，完整 MVP 尚未完成。
+
+- 可直接执行的起步路径见 [README](../README.md#处理一段音频)。
+- 已接受的目标行为与取舍见 [ADR 0001](adr/0001-mvp-product-and-pipeline.md)；本文中的实现限制不表示这些目标已取消。
+- Segment 指带开始时间、结束时间和文本的字幕片段；转录页与字幕视频的含义见[术语表](../GLOSSARY.md)。
 
 ## 主要入口
 
@@ -9,11 +13,11 @@ vidify process recording.m4a --model ./models/ggml-base.en.bin --output-dir ./ou
 ```
 
 - `process` 执行一次音频到字幕视频的完整任务。
-- 恰好一个位置参数表示输入音频；首轮不同时支持 `--input`。
+- 恰好一个位置参数表示输入音频；当前不支持 `--input`。
 - `--model` 接收本地模型文件路径，必须显式提供，值不能为空。
-- `--output-dir` 接收输出目录路径，首轮要求显式提供，值不能为空；它不接收 MP4 文件名。有效处理时若目录不存在，Vidify 会创建它。
+- `--output-dir` 接收输出目录路径，必须显式提供，值不能为空；它不接收 MP4 文件名。有效处理时若目录不存在，Vidify 会创建它。
 - `--ffmpeg-bin`、`--whisper-bin` 可选，用于指定对应可执行文件路径；未指定时从 PATH 查找。ffprobe 从 FFmpeg 同目录或 PATH 自动查找；Whisper 默认依次查找 `whisper-cli`、`whisper`、`main`。
-- 首轮只提供长选项，`-h` 为帮助选项。短别名可在有需要时增加。
+- 处理选项目前只提供长选项，`-h` 为帮助选项。
 - 相对路径相对于调用者的当前工作目录解释。带空格路径按所用 Shell 的规则加引号。
 - `--` 结束选项解析，可用于传入以 `-` 开头的文件名。
 
@@ -24,52 +28,64 @@ vidify process "my recording.m4a" --model ./models/ggml-base.en.bin --output-dir
 vidify process --model ./models/ggml-base.en.bin --output-dir ./out -- -recording.wav
 ```
 
-完整 MVP 成功后，示例输入对应 `out/recording.mp4` 与 `out/recording.srt`。当前切片也使用此命名，并拒绝覆盖已有产物；任务锁、跨平台发布语义和全部失败路径仍以 ADR 为最终要求。
+成功后，示例输入对应 `out/recording.mp4` 与 `out/recording.srt`；输入文件和模型不会被修改。Vidify 拒绝覆盖已有产物。当前发布依赖文件系统支持硬链接，目录级跨进程锁尚未实现，同一输出目录应串行处理。
 
-## 帮助草案
+## 查看帮助
 
-下面规定信息内容，不要求 Cobra 输出的空格、排序和排版逐字一致。
+当前可用选项以可执行文件的帮助为准：
 
-```text
-Generate a subtitle video and an SRT file from one audio file.
-
-Usage:
-  vidify process <audio-file> --model <path> --output-dir <directory>
-
-Flags:
-  -h, --help                   Show help for process
-      --model string           Local whisper.cpp model file (required)
-      --output-dir string      Directory for MP4 and SRT outputs (required)
-      --ffmpeg-bin string      Path to the FFmpeg executable
-      --whisper-bin string     Path to the whisper.cpp executable
-
-Example:
-  vidify process recording.m4a --model ./models/ggml-base.en.bin --output-dir ./out
+```sh
+vidify --help
+vidify process --help
 ```
 
-根命令无参数时展示帮助；`vidify --help` 能发现 `process`。帮助必须在没有 FFmpeg、whisper.cpp 或模型时正常显示，不启动外部进程，不创建输出目录或临时文件。
+根命令无参数时也展示帮助。`vidify --help` 可发现 `process`，`vidify process --help` 说明各选项；业务处理入口为 `process`，Cobra 同时提供 `help` 和 `completion` 辅助命令。帮助在没有 FFmpeg、whisper.cpp 或模型时也能显示，不启动外部进程，不创建输出目录或临时文件。
 
 ## 输出和错误约定
 
 - 显式请求帮助：帮助写入 stdout，退出码为 0；不探测外部依赖或创建输出目录。
-- 参数、依赖或处理错误：诊断写入 stderr，退出非零；错误只呈现一次。
-- 成功时将 MP4 与 SRT 路径写入 stdout。当前不显示阶段进度，也没有结构化日志。
-- 参数合法时，先检查输入、模型、可执行文件和 FFmpeg 编码能力，再转换音频、转录、生成字幕并渲染视频。
-- 默认拒绝覆盖已有输出。SRT 先在输出目录暂存并写完，再以不覆盖方式一次发布，最终路径不会在内容写完前出现；之后发布 MP4。MP4 发布失败时保留已发布的 SRT 并报告其路径。
-- 任务在进程内按线性阶段推进，并以 succeeded、failed、canceled 结束；错误包含发生阶段。Ctrl+C 会取消当前子进程、等待其退出，并以非零状态结束。阶段进度、结构化日志、清理失败警告和精确退出码语义仍待实现。
+- 参数、依赖或处理错误：诊断写入 stderr，当前统一退出码为 1，错误只呈现一次。处理阶段错误附带阶段名称；参数解析错误发生在任务创建前。
+- 成功时退出码为 0，将 MP4 与 SRT 的绝对路径依次写入 stdout，每行以 `Created ` 开头。当前不显示阶段进度，也没有结构化日志。
+- 参数合法时，先检查输入、模型、目标文件是否已存在、可执行文件、FFmpeg 的 `ass` 滤镜与 `libx264`/`aac` 编码器，再用 ffprobe 确认音频流和正时长。随后创建输出目录，开始转换、转录、排版和渲染。音频能否实际解码由转换阶段检验。
+- 默认拒绝覆盖已有输出。SRT 先在输出目录暂存并写完，再以不覆盖方式一次发布，最终路径不会在内容写完前出现；之后发布 MP4。MP4 发布失败时保留已发布的 SRT 并报告其路径。两者并非同时发布，取消发生在发布间隙时也可能只留下 SRT。
+- 任务在进程内按线性阶段推进，并以 succeeded、failed、canceled 结束；错误包含发生阶段。Ctrl+C 会取消当前子进程、等待其退出，并以退出码 1 结束。阶段进度、结构化日志、清理失败警告和按错误类型区分的退出码仍待实现。
 
-## 当前切片已实现并验证
+### 常见错误的处理
 
-- 检查输入和模型文件，使用 FFmpeg 确认音频流可解码，并转成 16 kHz、单声道、16-bit PCM WAV。
-- 调用 whisper.cpp JSON 输出，用毫秒偏移创建 `Segment` 并生成标准 SRT。
+先按诊断中的阶段和底层错误定位。下表列出当前有明确处理路径的情况：
+
+| 诊断内容或情形 | 检查与下一步 |
+| --- | --- |
+| `find FFmpeg`、`find ffprobe` 或找不到 whisper.cpp | 检查 PATH 或显式工具路径；ffprobe 应在 FFmpeg 同目录或 PATH 中。Vidify 不负责安装这些依赖。 |
+| 缺少 `ASS/libass` 滤镜，或编码器 `unavailable` | 换用具备 `ass`、`libx264`、`aac` 的 FFmpeg 构建；仅找到 FFmpeg 可执行文件并不足够。 |
+| `input has no audio stream` 或未取得正时长 | 检查输入是否包含音频、是否完整，以及 ffprobe 能否读取时长。当前无法处理未取得正时长的输入。 |
+| `output file already exists` | 任一同名 SRT/MP4 都会阻止处理。保留已有文件，改用新的输出目录重试。 |
+| `cannot lay out segment` | 查看错误中的片段编号、时间戳和原因。字体缺字、单段在最小字号仍放不下或不可表示的显示区间都会中止处理；不会生成裁切文本的视频。 |
+| MP4 发布失败或发布期间取消 | 检查输出目录是否已留下有效 SRT。保留所需产物后改用新的输出目录；当前没有覆盖或恢复命令。 |
+
+## 当前处理链路
+
+普通中间文件放在系统临时目录下的独立 `vidify-*` 目录中，包括识别用 WAV、转录 JSON、ASS 和字体。MP4/SRT 在目标输出目录中暂存，保证发布源与目标处于同一文件系统。正常返回时会尝试清理这些文件；没有 `--keep-temp` 或自定义工作区入口，删除错误目前被忽略，异常退出可能留下残留文件。
+
+各阶段依次执行：
+
+- 用 ffprobe 确认存在音频流并读取正时长；FFmpeg 再将第一条音频流解码为 16 kHz、单声道、16-bit PCM WAV，供 whisper.cpp 识别。
+- 调用 whisper.cpp 输出 JSON，用毫秒偏移创建内部 `segment`，检查非空文本、正时间区间和开始时间非递减，再生成 SRT。SRT 使用原始发声区间，不随视频翻页延长或裁短。
 - 当前 MP4 使用临时黑底和内置 DejaVu Serif 字体。Go 使用同一字体文件的实际字形边界与行高换行并计算页面容量；新页会在需要时缩小字号，字号下限为临时值 32 px。ASS 为每个 Segment 生成一个从原始开始时间延续到本页结束的事件；视频使用 1920×1080、30 fps、H.264，音频使用 AAC。
 - 新页从触发分页的 Segment 开始；前页在同一时间结束；末页延伸到 ffprobe 读取的音频时长。ASS 边界统一取最近厘秒，SRT 保留 Whisper 原始毫秒区间。
-- 输出名取输入文件基础名。已有 MP4 或 SRT 时拒绝覆盖。
-- `/tmp/vidify-prereqs/samples/representative.wav` 的手动端到端验证得到 52 个时间戳片段；MP4 可解码，抽帧检查确认页面累积、切换和字体显示正常，视频时长与音频一致。产物位于 `/tmp/vidify-prereqs/pagination-output-final/`。
+- 输出名取输入文件基础名。渲染使用输入的第一条音频流重新编码为 AAC，不使用识别用的 16 kHz 单声道 WAV 作为播放音轨。MP4 非空且经 FFmpeg 完整解码检查通过后，先发布 SRT，再发布 MP4。
 
-## 输入格式验收
+## 验证范围与记录
 
-当前提交在 Linux、FFmpeg/ffprobe 6.1.1、whisper.cpp 本地构建与 `ggml-base.en.bin` 模型下，使用同一段 11 秒英语音频转换出的以下样本完成端到端验证。这覆盖各格式的一种编码配置，不代表所有采样率、声道、容器变体或损坏方式均已验证。
+以下记录适用于注明的源码基线和样本，不表示全部输入均有相同结果。自动测试不调用真实外部工具，只覆盖字幕分页、SRT 发布保护、时长解析和任务状态；运行方式见 [README](../README.md#开发与深入阅读)。
+
+### 历史手动验收
+
+已有代表性英语 WAV 样本的手动端到端验证得到 52 个时间戳片段；MP4 可解码，抽帧检查确认页面累积、切换和字体显示正常，视频时长与音频一致。样本与产物曾保存在验证机器的临时目录中，未随仓库分发，不是新环境可直接复用的测试夹具。
+
+### 输入格式验收
+
+提交 `72e8c5a` 记录了以下结果：在 Linux、FFmpeg/ffprobe 6.1.1、whisper.cpp 本地构建与 `ggml-base.en.bin` 模型下，使用同一段 11 秒英语音频转换出的样本完成端到端验证。这覆盖各格式的一种编码配置，不代表所有采样率、声道、容器变体或损坏方式均已验证。
 
 | 输入格式 | 输入容器时长 | 输出 MP4 时长 | 结果 |
 | --- | --- | --- | --- |
@@ -84,6 +100,14 @@ Example:
 
 已有输出保护覆盖四组成功产物的重复运行，以及输出目录中仅有同名 SRT 或仅有同名 MP4 的情况。均拒绝处理，已有文件内容不变，没有创建其他产物或遗留暂存文件；此验证不覆盖跨进程竞争。
 
+### 命令示例复核（源码基线 `72e8c5a`）
+
+在 Linux、Go 1.26.5、FFmpeg/ffprobe 6.1.1、本地 whisper.cpp 构建和 `ggml-base.en.bin` 下，从已有英语 WAV 截取 11 秒样本，使用含空格的输入路径完成转换。输出为 11 秒的 H.264/AAC MP4（1920×1080、30 fps）和含 5 个片段的 SRT，stdout 输出两条绝对路径，输入文件哈希未改变，输出目录无暂存文件残留。重复运行以退出码 1 拒绝覆盖，两个产物哈希均未改变。
+
+清空 PATH 后，根命令无参数、根帮助和 `process --help` 均以退出码 0 显示帮助且未创建文件；缺少位置参数时以退出码 1 输出一次错误。`go test ./...` 通过。
+
+此样本 SRT 的最后一条结束于 11.080 秒，略晚于 11 秒音频结束。当前实现不裁短原始 SRT 区间；历史样本中的“未超出输入时长”只是一项样本结果，不能作为所有输入的保证。此次复核未覆盖四种输入编码、长音频、多语言、跨平台行为或分页画面的视觉验收。
+
 ## 尚未完成的 MVP 行为
 
 - 正式输入格式的其他编码配置、更多真实样本和损坏方式，以及长音频仍待验证。
@@ -94,8 +118,31 @@ Example:
 
 已接入 `--ffmpeg-bin` 和 `--whisper-bin`。语言选择、`--keep-temp`、`--version`、详细日志选项和工作区路径选项仍待接入；每个选项应与其实际行为一起加入。MVP 不将内部转换、排版或发布阶段暴露为独立子命令。
 
-协作方式：AI 按小步编写代码，同时解释设计理由、具体逻辑和验证结果；维护者参与理解、设计与审查。累积分页面和首轮职责重构已完成；后续按 MVP 可靠性要求继续小步实现。
+## 代码阅读路径
+
+以 `vidify process recording.wav --model model.bin --output-dir out` 为线索阅读：
+
+1. [root.go](../cmd/cli/root.go) 注册 Cobra 命令，将 Ctrl+C 转成 context 取消，在最外层统一打印错误和退出。
+2. [process.go](../cmd/cli/process.go) 的 `newProcessCommand` 解析用户输入，`processAudio` 按顺序编排整个任务并拥有临时文件生命周期。它是理解执行顺序、接入新阶段行为的入口；当前仍与 CLI 定义在同一文件。
+3. [tools.go](../cmd/cli/tools.go) 查找工具、读取音频时长并用 `exec.CommandContext` 启动独立进程。FFmpeg 生成供识别的 WAV；最终编码使用原输入的音频流，避免把 16 kHz 单声道的识别输入当作播放音轨。
+4. [transcript.go](../cmd/cli/transcript.go) 将 whisper.cpp JSON 转成内部 `segment`，验证区间与文本，再按原始发声区间导出 SRT。下游不直接依赖 whisper.cpp JSON 字段。
+5. [subtitle_layout.go](../cmd/cli/subtitle_layout.go) 使用内置字体度量文字，生成页面和固定位置的事件，再导出 ASS。每个事件从 Segment 开始延续至该页结束；布局不改变原始 Segment 的 End，因此不会改变 SRT 时间轴。
+6. [outputs.go](../cmd/cli/outputs.go) 验证视频并发布文件。当前通过同一文件系统上的硬链接为完整暂存文件增加正式名称，之后删除暂存名称；不复制大型 MP4，也不替换已存在目标。这依赖文件系统支持硬链接，不是双文件事务，也不替代计划中的目录锁。
+7. [task.go](../cmd/cli/task.go) 记录阶段与运行结果。它检查调用方是否按顺序推进，不自行调度工作。失败时保留阶段和底层错误，便于判断是转录、渲染还是发布失败。
+
+这些文件仍在一个 `cli` 包中，拆文件只是职责组织，并未建立独立服务或抽象层。阅读时先沿 `processAudio` 理解数据如何流动，再进入需要修改的函数。
+
+## 当前实现与目标的差距
+
+以下是源码边界，不能把 ADR 的目标描述当作现有保证：
+
+- whisper.cpp 调用尚未传语言参数；实际识别语言由所用程序的默认值决定，不能宣称已实现默认自动检测。
+- 输入预检确认存在音频流及正时长，但尚未明确拒绝同时含视频流的容器。
+- `runToolInDir` 用内存缓冲收集完整 stdout/stderr；失败时只展示末尾 4000 字节，并不代表内存使用有界。当前还会合并两路输出，结构化输出解析需要留意工具的诊断信息。
+- 清理使用 defer，但删除错误被忽略；正常路径通常会清理，清理失败 Warning 仍待实现。
+- 发布使用硬链接，尚无目录级 OS 锁；两个 Vidify 进程不能获得整个 SRT/MP4 发布对的互斥保证。部分发布的取消诊断仍需完善。
+- 转录校验允许片段区间重叠，也不会将 SRT 的 End 裁到音频结束；排版检查片段的开始时间早于音频结束，但未要求 End 不超出音频。因此，字幕文件可能含有晚于音频结束的结束时间。
 
 ## 当前开发方式
 
-累积字幕分页已接入并通过真实样本验证。实现已按职责拆分在 `cmd/cli` 包内：CLI 与任务编排、外部工具、转录与 SRT、字幕布局与 ASS、产物验证与发布；外部 CLI 行为保持不变。进程内阶段状态和 Ctrl+C 取消已实现，四种正式输入格式各有短样本通过验收；下一步先实现输出目录跨进程锁，再补齐临时工作区、清理警告、阶段进度和日志。不要按阶段机械地预建包。字体、配色和页面参数仍是临时值，最终样式继续遵循 ADR 的待决定事项。
+AI 按小步编写代码并解释设计理由、具体逻辑和验证结果；维护者参与理解、设计与审查。累积字幕分页和首轮职责重构已完成，实现仍位于 `cmd/cli` 包内。后续沿用已明确的方向：先实现输出目录跨进程锁，再补齐临时工作区、清理警告、阶段进度和日志；不按阶段机械地预建包。字体、配色和页面参数仍是临时值，最终样式继续遵循 ADR 的待决定事项。

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vidify 后续开发流程</title>
+  <title>Vidify 处理链路与开发状态</title>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,19 +34,19 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">VIDIFY · MVP DEVELOPMENT ROADMAP</p>
-  <h1>从 CLI 骨架到可交付的音频视频</h1>
-  <p class="intro">按实现依赖从左到右推进：先定义稳定的命令入口和任务底座，再接通转录、字幕与视频，最后验证并发布 MP4 和 SRT。每一步先做出下方标注的产物，再进入下一步。</p>
+  <p class="eyebrow">VIDIFY · PIPELINE AND MVP STATUS</p>
+  <h1>从本地音频到字幕视频</h1>
+  <p class="intro">当前已接通转录、字幕分页、视频渲染和产物发布。图中展示处理链路；任务基础与发布保护仍有待补齐的能力，完整 MVP 尚未完成。当前行为和验证范围见 <a href="cli-contract.md">CLI 契约</a>，目标与取舍见 <a href="adr/0001-mvp-product-and-pipeline.md">ADR 0001</a>。</p>
   <div class="diagram-container">
     <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="vidify-roadmap-title vidify-roadmap-desc">
-      <title id="vidify-roadmap-title">Vidify 后续开发流程</title>
-      <desc id="vidify-roadmap-desc">八个按依赖排序的开发阶段，从 process 命令和任务基础开始，经过音频规范化、转录、SRT、ASS 排版与视频渲染，最终验证并发布 MP4 和 SRT。</desc>
+      <title id="vidify-roadmap-title">Vidify 处理链路与开发状态</title>
+      <desc id="vidify-roadmap-desc">处理链路已接通 process 命令、任务基础、音频转换、转录、SRT、ASS 排版、MP4 渲染和发布。任务基础仍缺目录锁、日志和应用工作区；发布依赖硬链接，清理警告仍待实现。图中节点是职责概览，与任务状态中的六个阶段不逐一对应。</desc>
       <defs>
         <marker id="roadmap-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
         <marker id="roadmap-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#bf4520"/></marker>
       </defs>
       <rect width="1280" height="720" fill="#f5f5f5"/>
-      <text x="72" y="64" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="2">BUILD ORDER · 8 STAGES</text>
+      <text x="72" y="64" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="2">PROCESSING FLOW · 8 STEPS</text>
       <text x="1208" y="64" text-anchor="end" fill="#5a6580" font-family="'Geist Mono',monospace" font-size="11">MVP · ONE LOCAL AUDIO FILE</text>
 
       <!-- Flow connectors: top row left-to-right, then bottom row right-to-left. -->
@@ -61,9 +61,9 @@
       <!-- Stage 1 -->
       <g font-family="'Geist','Noto Sans SC',sans-serif">
         <rect x="72" y="142" width="240" height="180" rx="6" fill="rgba(191,69,32,.08)" stroke="#bf4520" stroke-width="1.5"/>
-        <text x="92" y="170" fill="#bf4520" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">01 · START HERE</text>
-        <text x="92" y="202" fill="#2d3142" font-size="19" font-weight="600">搭好 process 命令</text>
-        <text x="92" y="232" fill="#4f5d75" font-size="13">补齐 input / output / model 等参数</text>
+        <text x="92" y="170" fill="#bf4520" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">01 · CLI ENTRY</text>
+        <text x="92" y="202" fill="#2d3142" font-size="19" font-weight="600">process 命令入口</text>
+        <text x="92" y="232" fill="#4f5d75" font-size="13">单个音频、model 与 output-dir</text>
         <text x="92" y="253" fill="#4f5d75" font-size="13">检查参数与依赖，给出清楚错误</text>
         <line x1="92" y1="274" x2="292" y2="274" stroke="rgba(45,49,66,.14)"/>
         <text x="92" y="299" fill="#2d3142" font-size="12" font-weight="600">产物：可调用的 CLI 契约</text>
@@ -72,12 +72,12 @@
       <!-- Stage 2 -->
       <g font-family="'Geist','Noto Sans SC',sans-serif">
         <rect x="368" y="142" width="240" height="180" rx="6" fill="#fff" stroke="rgba(45,49,66,.28)"/>
-        <text x="388" y="170" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">02 · TASK FOUNDATION</text>
-        <text x="388" y="202" fill="#2d3142" font-size="19" font-weight="600">实现任务底座</text>
-        <text x="388" y="232" fill="#4f5d75" font-size="13">阶段状态、日志、取消与临时目录</text>
-        <text x="388" y="253" fill="#4f5d75" font-size="13">外部进程调用、输出目录互斥锁</text>
+        <text x="388" y="170" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">02 · TASK · PARTIAL</text>
+        <text x="388" y="202" fill="#2d3142" font-size="19" font-weight="600">任务基础：部分实现</text>
+        <text x="388" y="232" fill="#4f5d75" font-size="13">已有阶段状态、取消与进程调用</text>
+        <text x="388" y="253" fill="#4f5d75" font-size="13">待补目录锁、日志与应用工作区</text>
         <line x1="388" y1="274" x2="588" y2="274" stroke="rgba(45,49,66,.14)"/>
-        <text x="388" y="299" fill="#2d3142" font-size="12" font-weight="600">产物：可安全运行的任务壳</text>
+        <text x="388" y="299" fill="#2d3142" font-size="12" font-weight="600">已有：进程内线性任务状态</text>
       </g>
 
       <!-- Stage 3 -->
@@ -85,7 +85,7 @@
         <rect x="664" y="142" width="240" height="180" rx="6" fill="#fff" stroke="rgba(45,49,66,.28)"/>
         <text x="684" y="170" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">03 · AUDIO</text>
         <text x="684" y="202" fill="#2d3142" font-size="19" font-weight="600">校验并规范化音频</text>
-        <text x="684" y="232" fill="#4f5d75" font-size="13">确认有可解码音频流</text>
+        <text x="684" y="232" fill="#4f5d75" font-size="13">探测音频流与时长，再解码</text>
         <text x="684" y="253" fill="#4f5d75" font-size="13">FFmpeg 转 16 kHz / mono / PCM WAV</text>
         <line x1="684" y1="274" x2="884" y2="274" stroke="rgba(45,49,66,.14)"/>
         <text x="684" y="299" fill="#2d3142" font-size="12" font-weight="600">产物：标准化 WAV</text>
@@ -106,9 +106,9 @@
       <g font-family="'Geist','Noto Sans SC',sans-serif">
         <rect x="960" y="418" width="240" height="180" rx="6" fill="#fff" stroke="rgba(45,49,66,.28)"/>
         <text x="980" y="446" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">05 · SUBTITLES</text>
-        <text x="980" y="478" fill="#2d3142" font-size="19" font-weight="600">先完成 SRT</text>
+        <text x="980" y="478" fill="#2d3142" font-size="19" font-weight="600">生成 SRT 字幕</text>
         <text x="980" y="508" fill="#4f5d75" font-size="13">按原始 Segment 时间生成字幕</text>
-        <text x="980" y="529" fill="#4f5d75" font-size="13">独立验证格式、顺序与时间范围</text>
+        <text x="980" y="529" fill="#4f5d75" font-size="13">保留毫秒区间，不随翻页延长</text>
         <line x1="980" y1="550" x2="1180" y2="550" stroke="rgba(45,49,66,.14)"/>
         <text x="980" y="575" fill="#2d3142" font-size="12" font-weight="600">产物：标准 SRT 文件</text>
       </g>
@@ -130,7 +130,7 @@
         <text x="388" y="446" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">07 · VIDEO</text>
         <text x="388" y="478" fill="#2d3142" font-size="19" font-weight="600">渲染并核对 MP4</text>
         <text x="388" y="508" fill="#4f5d75" font-size="13">FFmpeg + libass：H.264 / AAC</text>
-        <text x="388" y="529" fill="#4f5d75" font-size="13">1920×1080、30 fps，保留原音频</text>
+        <text x="388" y="529" fill="#4f5d75" font-size="13">1920×1080、30 fps，音轨重编码</text>
         <line x1="388" y1="550" x2="588" y2="550" stroke="rgba(45,49,66,.14)"/>
         <text x="388" y="575" fill="#2d3142" font-size="12" font-weight="600">产物：可播放且同步的 MP4</text>
       </g>
@@ -138,23 +138,23 @@
       <!-- Stage 8 -->
       <g font-family="'Geist','Noto Sans SC',sans-serif">
         <rect x="72" y="418" width="240" height="180" rx="6" fill="#fff" stroke="rgba(45,49,66,.28)"/>
-        <text x="92" y="446" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">08 · RELEASE</text>
+        <text x="92" y="446" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">08 · PUBLISH · PARTIAL</text>
         <text x="92" y="478" fill="#2d3142" font-size="19" font-weight="600">验证后再发布</text>
-        <text x="92" y="508" fill="#4f5d75" font-size="13">检查 MP4 与 SRT，默认拒绝覆盖</text>
-        <text x="92" y="529" fill="#4f5d75" font-size="13">发布、清理临时文件、跑端到端样例</text>
+        <text x="92" y="508" fill="#4f5d75" font-size="13">硬链接发布，默认拒绝覆盖</text>
+        <text x="92" y="529" fill="#4f5d75" font-size="13">先 SRT 后 MP4，待补清理警告</text>
         <line x1="92" y1="550" x2="292" y2="550" stroke="rgba(45,49,66,.14)"/>
-        <text x="92" y="575" fill="#2d3142" font-size="12" font-weight="600">完成：MP4 + SRT 均有效</text>
+        <text x="92" y="575" fill="#2d3142" font-size="12" font-weight="600">成功条件：两份产物均已发布</text>
       </g>
 
       <line x1="72" y1="636" x2="1208" y2="636" stroke="rgba(45,49,66,.16)"/>
       <text x="72" y="664" fill="#4f5d75" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="1">CURRENT BASELINE</text>
-      <text x="268" y="664" fill="#2d3142" font-family="'Geist','Noto Sans SC',sans-serif" font-size="13">已有 MVP 决策文档与 Cobra CLI 骨架；图中 8 个实现阶段仍待完成。</text>
-      <text x="72" y="692" fill="#5a6580" font-family="'Geist','Noto Sans SC',sans-serif" font-size="12">字体、FFmpeg 能力检查、whisper.cpp 兼容范围等待定细节，在依赖对应阶段前确认。</text>
+      <text x="268" y="664" fill="#2d3142" font-family="'Geist','Noto Sans SC',sans-serif" font-size="13">端到端链路与短样本验收已完成；可靠性能力与最终样式仍待补齐。</text>
+      <text x="72" y="692" fill="#5a6580" font-family="'Geist','Noto Sans SC',sans-serif" font-size="12">待验证：更多编码与长音频、字体覆盖、whisper.cpp 兼容范围，以及跨平台发布行为。</text>
     </svg>
   </div>
   <div class="caption">
-    <span><strong>当前起点：</strong>先补齐 `vidify process` 命令，再搭任务运行底座。</span>
-    <span><strong>验收终点：</strong>一次本地音频处理成功，MP4 与 SRT 都通过验证并发布。</span>
+    <span><strong>当前重点：</strong>输出目录锁、临时工作区、清理警告、阶段进度和日志。</span>
+    <span><strong>验收终点：</strong>MP4 与 SRT 均已验证并发布；完整要求见 <a href="adr/0001-mvp-product-and-pipeline.md">ADR 0001</a>。</span>
   </div>
 </main>
 </body>
